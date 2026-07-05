@@ -1,21 +1,82 @@
-MIT License
+Copyright (c) 2026 Miracle. All Rights Reserved.
 
-Copyright (c) 2026 Miraclebot15
+NEXUS CORE — PROPRIETARY SOFTWARE LICENSE
+(Limited Public-Visibility / Hackathon Evaluation License)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This repository and all source code, documentation, architecture, prompts,
+configuration, assets, and other materials contained within it
+(collectively, the "Software") are the exclusive property of the copyright
+holder named above (the "Author"). This repository is made publicly visible
+solely to satisfy the public-repository requirement of the hackathon or
+competition for which it was submitted (the "Competition"), and such public
+visibility does NOT constitute a grant of license to use, copy, modify, or
+distribute the Software, except as expressly stated below.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. RESERVATION OF RIGHTS
+   All rights, title, and interest in and to the Software, including all
+   intellectual property rights therein, are and shall remain the exclusive
+   property of the Author. No rights are granted to any person or entity
+   except as explicitly set out in this License.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. LIMITED PERMISSION — EVALUATION ONLY
+   Permission is granted, solely to the organizers, judges, and authorized
+   staff of the Competition ("Evaluators"), to:
+     (a) view, read, and clone the Software;
+     (b) build and run the Software locally or in a sandboxed environment;
+   for the sole and exclusive purpose of evaluating, scoring, and judging
+   the submission as part of the Competition. This permission automatically
+   terminates at the conclusion of the Competition's judging period unless
+   separately renewed in writing by the Author.
+
+3. NO OTHER RIGHTS GRANTED
+   Except for the limited permission in Section 2, no person or entity
+   (including but not limited to other participants, members of the public,
+   or automated systems such as web crawlers, dataset builders, or AI
+   training pipelines) may, without the Author's prior express written
+   consent:
+     (a) copy, reproduce, or create derivative works of the Software, in
+         whole or in part;
+     (b) modify, adapt, translate, or reverse-engineer the Software;
+     (c) distribute, sublicense, publish, rent, lease, or otherwise make
+         the Software available to any third party;
+     (d) use the Software, or any portion of it, for commercial purposes;
+     (e) use the Software, or any portion of it, to train, fine-tune, or
+         evaluate any machine learning or artificial intelligence model;
+     (f) incorporate the Software, or any portion of it, into any other
+         product, service, or codebase.
+
+4. NO IMPLIED LICENSE FROM PUBLIC VISIBILITY
+   The public visibility of this repository is incidental to the
+   Competition's submission requirements only. It shall not be construed,
+   under any circumstance, as an offer, dedication, or grant of an open
+   source license (including but not limited to MIT, Apache, GPL, BSD, or
+   any similar license), nor as a waiver of any of the Author's rights.
+
+5. ATTRIBUTION OF THIRD-PARTY COMPONENTS
+   The Software may incorporate third-party open-source packages or
+   dependencies, each of which remains subject to its own respective
+   license terms. Nothing in this License affects those third-party terms,
+   and this License applies only to the original code, architecture, and
+   materials authored by the Author.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+7. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR
+   THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. GOVERNING LAW
+   This License shall be governed by and construed in accordance with the
+   laws of Nigeria, without regard to its conflict of law
+   principles.
+
+9. CONTACT FOR PERMISSIONS
+   Requests for any use beyond what is expressly permitted in Section 2
+   must be directed to: Perstonjack@gmail.com
+
+By accessing, cloning, or evaluating this repository, you acknowledge that
+you have read and agree to be bound by the terms of this License.
