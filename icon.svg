@@ -1,0 +1,20 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @media (prefers-color-scheme: light) {
+      .bg { fill: #0B0D10; }
+      .fg { stroke: #E9ECEE; fill: #E9ECEE; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0B0D10; }
+      .fg { stroke: #E9ECEE; fill: #E9ECEE; }
+    }
+  </style>
+  <rect class="bg" width="180" height="180" rx="37" />
+  <g transform="translate(34,34) scale(3.5)">
+    <rect x="3" y="4" width="9" height="9" rx="2.5" class="fg" fill="none" stroke-width="2" />
+    <rect x="20" y="19" width="9" height="9" rx="2.5" class="fg" fill="none" stroke-width="2" />
+    <circle cx="16" cy="16" r="3.2" class="fg" stroke="none" />
+    <path d="M11 9.5 L14 14" class="fg" fill="none" stroke-width="2" stroke-linecap="round" />
+    <path d="M18.2 18 L21 22.5" class="fg" fill="none" stroke-width="2" stroke-linecap="round" />
+  </g>
+</svg>
