@@ -1,7 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
-import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css'
 
 const plexSans = IBM_Plex_Sans({
@@ -36,13 +35,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en" className={`dark ${plexSans.variable} ${plexMono.variable}`}>
+          <html lang="en" className={`dark ${plexSans.variable} ${plexMono.variable}`}>
         <body className="font-sans antialiased">
           {children}
           {process.env.NODE_ENV === 'production' && <Analytics />}
         </body>
       </html>
-    </ClerkProvider>
+    
   )
 }

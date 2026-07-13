@@ -1,267 +1,204 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import {
-  ArrowUp,
-  Brain,
-  Cpu,
-  FileText,
-  Lightbulb,
-  Microscope,
-  Zap,
-  Image as ImageIcon,
-  Mic,
-  Plus,
-  Search,
-  Square,
-  Upload,
-} from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowUp, Mic, MicOff, Paperclip, Zap, Square, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { QWEN_MODELS } from '@/lib/models'
-import { Menu, type MenuSection } from './menu'
-
-type ReasoningMode = 'standard' | 'deep-research' | 'thinking' | 'brainstorming' | 'learning'
-
-/** Real (if simple) hints prepended to the prompt ELLA receives -- not a
- *  cosmetic tag. Each one nudges the actual model's behavior. */
-const REASONING_PREFIXES: Record<ReasoningMode, string> = {
-  standard: '',
-  'deep-research': 'Research this thoroughly using web search and cite sources where relevant. ',
-  thinking: 'Think through this step by step before proposing a plan. ',
-  brainstorming: 'Brainstorm multiple distinct options before settling on a plan. ',
-  learning: 'Explain your reasoning in an educational, step-by-step way. ',
-}
-
-const REASONING_MODES: Record<
-  ReasoningMode,
-  { label: string; description: string; icon: typeof Brain }
-> = {
-  standard: { label: 'Standard', description: 'Fast, direct responses', icon: Zap },
-  'deep-research': {
-    label: 'Deep Research',
-    description: 'Uses the real web_search tool, with sources',
-    icon: Microscope,
-  },
-  thinking: { label: 'Thinking', description: 'Extended reasoning process', icon: Brain },
-  brainstorming: { label: 'Brainstorming', description: 'Creative exploration', icon: Lightbulb },
-  learning: { label: 'Learning', description: 'Educational deep dive', icon: Cpu },
-}
 
 export function Composer({
   onSend,
   onStop,
-  onOpenSearch,
-  isBusy,
-  reasoningMode,
-  onSelectReasoningMode,
-  selectedModel,
-  onSelectModel,
+  disabled = false,
+  streaming = false,
+  placeholder = 'Ask anything, upload files, generate images...',
 }: {
-  onSend: (text: string) => void
-  onStop: () => void
-  onOpenSearch: () => void
-  isBusy: boolean
-  reasoningMode: ReasoningMode
-  onSelectReasoningMode: (mode: ReasoningMode) => void
-  selectedModel: string
-  onSelectModel: (model: string) => void
+  onSend: (text: string, files?: File[]) => void
+  onStop?: () => void
+  disabled?: boolean
+  streaming?: boolean
+  placeholder?: string
 }) {
-  const [value, setValue] = useState('')
-  const taRef = useRef<HTMLTextAreaElement>(null)
+  const [text, setText] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const [recording, setRecording] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
 
-  const grow = () => {
-    const ta = taRef.current
+  // Load draft on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('nexus:draft')
+    if (saved) setText(saved)
+  }, [])
+
+  // Save draft on change
+  useEffect(() => {
+    localStorage.setItem('nexus:draft', text)
+  }, [text])
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current
     if (!ta) return
     ta.style.height = 'auto'
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`
+    ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'
+  }, [text])
+
+  const send = () => {
+    if ((!text.trim() && files.length === 0) || disabled || streaming) return
+    onSend(text.trim(), files)
+    setText('')
+    setFiles([])
+    localStorage.removeItem('nexus:draft')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
-  const submit = () => {
-    const text = value.trim()
-    if (!text || isBusy) return
-    onSend(`${REASONING_PREFIXES[reasoningMode]}${text}`)
-    setValue('')
-    requestAnimationFrame(() => {
-      if (taRef.current) taRef.current.style.height = 'auto'
-    })
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
-  const attachSections: MenuSection[] = [
-    {
-      id: 'files',
-      label: 'Add Files & Media',
-      items: [
-        {
-          id: 'upload',
-          label: 'Upload from device',
-          description: 'Not yet supported by the backend',
-          icon: Upload,
-          disabled: true,
-          onSelect: () => {},
-        },
-        {
-          id: 'image',
-          label: 'Add image',
-          description: 'Not yet supported by the backend',
-          icon: ImageIcon,
-          disabled: true,
-          onSelect: () => {},
-        },
-        {
-          id: 'doc',
-          label: 'Attach document',
-          description: 'Not yet supported by the backend',
-          icon: FileText,
-          disabled: true,
-          onSelect: () => {},
-        },
-      ],
-    },
-    {
-      id: 'reasoning',
-      label: 'Reasoning Mode',
-      items: Object.entries(REASONING_MODES).map(([key, meta]) => ({
-        id: key,
-        label: meta.label,
-        description: meta.description,
-        icon: meta.icon,
-        selected: key === reasoningMode,
-        onSelect: () => onSelectReasoningMode(key as ReasoningMode),
-      })),
-    },
-    {
-      id: 'model',
-      label: 'AI Model',
-      items: QWEN_MODELS.map((m) => ({
-        id: m.id,
-        label: m.label,
-        description: m.description,
-        icon: Cpu,
-        selected: m.id === selectedModel,
-        onSelect: () => onSelectModel(m.id),
-      })),
-    },
-  ]
+  const handleFiles = (incoming: FileList | null) => {
+    if (!incoming) return
+    setFiles(prev => [...prev, ...Array.from(incoming)])
+  }
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Respect IME composition (CJK) before submitting on Enter.
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-      e.preventDefault()
-      submit()
-    }
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      chunksRef.current = []
+      mr.ondataavailable = e => chunksRef.current.push(e.data)
+      mr.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const file = new File([blob], 'voice.webm', { type: 'audio/webm' })
+        stream.getTracks().forEach(t => t.stop())
+        // Send as file attachment
+        onSend('[Voice message]', [file])
+      }
+      mr.start()
+      mediaRecorderRef.current = mr
+      setRecording(true)
+    } catch { console.warn('Mic access denied') }
+  }
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop()
+    setRecording(false)
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <div className="glass-strong rounded-2xl border border-border/50 p-3 shadow-xl shadow-black/20 transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-2xl focus-within:shadow-primary/10">
+    <div className="relative px-3 pb-4 pt-2">
+      {/* File previews */}
+      <AnimatePresence>
+        {files.length > 0 && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }} className="mb-2 flex flex-wrap gap-2">
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center gap-1.5 rounded-lg border border-white/[0.10] bg-white/[0.06] px-3 py-1.5 text-xs text-white/70 backdrop-blur-sm">
+                <Paperclip className="size-3 text-violet-400" />
+                <span className="max-w-[120px] truncate">{f.name}</span>
+                <button type="button" onClick={() => setFiles(p => p.filter((_, j) => j !== i))}
+                  className="ml-1 text-white/40 hover:text-white/80">×</button>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main composer glass card */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files) }}
+        className={cn(
+          'relative rounded-2xl border transition-all duration-300',
+          'backdrop-blur-xl',
+          dragOver
+            ? 'border-violet-500/60 bg-violet-500/10 shadow-[0_0_30px_rgba(123,47,190,0.3)]'
+            : 'border-white/[0.12] bg-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.08)]'
+        )}
+      >
+        {/* Textarea */}
         <textarea
-          ref={taRef}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value)
-            grow()
-          }}
-          onKeyDown={onKeyDown}
+          ref={textareaRef}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={handleKey}
+          placeholder={recording ? 'Listening...' : placeholder}
+          disabled={disabled || recording}
           rows={1}
-          placeholder="What would you like NEXUS CORE to orchestrate?"
-          className="max-h-[200px] w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60"
+          className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-[15px] leading-relaxed text-white placeholder:text-white/25 outline-none min-h-[52px] max-h-[200px]"
         />
 
-        <div className="mt-2 flex items-center justify-between gap-3 px-1">
-          <div className="flex items-center gap-0.5">
-            <Menu
-              align="start"
-              side="top"
-              ariaLabel="Attach"
-              sections={attachSections}
-              trigger={({ ref, onClick, open, ...aria }) => (
-                <button
-                  ref={ref}
-                  type="button"
-                  onClick={onClick}
-                  {...aria}
-                  title="Attach files, images, or documents"
-                  className={cn(
-                    'flex items-center justify-center rounded-lg p-2 transition-all duration-150',
-                    open
-                      ? 'bg-primary/20 text-primary'
-                      : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
-                  )}
-                >
-                  <Plus className="size-5" />
-                </button>
-              )}
-            />
-            <Menu
-              align="start"
-              side="top"
-              ariaLabel="Select reasoning mode"
-              sections={attachSections.slice(1, 2)}
-              trigger={({ ref, onClick, open, ...aria }) => {
-                const reasoningMeta = REASONING_MODES[reasoningMode]
-                const ReasoningIcon = reasoningMeta.icon
-                return (
-                  <button
-                    ref={ref}
-                    type="button"
-                    onClick={onClick}
-                    {...aria}
-                    title={`Reasoning mode: ${reasoningMeta.label}`}
-                    className={cn(
-                      'flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-all duration-150',
-                      open || reasoningMode !== 'standard'
-                        ? 'bg-primary/20 text-primary'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    <ReasoningIcon className="size-4" />
-                    <span className="hidden sm:inline">{reasoningMeta.label}</span>
-                  </button>
-                )
-              }}
-            />
-            <button
-              type="button"
-              onClick={onOpenSearch}
-              title="Search memory"
-              className="hidden items-center justify-center rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground sm:flex"
-            >
-              <Search className="size-5" />
-            </button>
-          </div>
+        {/* Bottom toolbar */}
+        <div className="flex items-center gap-1 px-3 pb-3">
+          {/* File upload */}
+          <input ref={fileInputRef} type="file" multiple className="hidden"
+            onChange={e => handleFiles(e.target.files)} />
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            className="flex size-8 items-center justify-center rounded-xl text-white/35 transition-all hover:bg-white/[0.08] hover:text-violet-400">
+            <Paperclip className="size-4" />
+          </button>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled
-              title="Voice input (not yet supported by the backend)"
-              className="flex items-center justify-center rounded-lg p-2 text-muted-foreground/40 transition-colors"
-            >
-              <Mic className="size-5" />
+          {/* Image gen shortcut */}
+          <button type="button" onClick={() => setText('Generate an image of ')}
+            className="flex size-8 items-center justify-center rounded-xl text-white/35 transition-all hover:bg-white/[0.08] hover:text-violet-400">
+            <ImageIcon className="size-4" />
+          </button>
+
+          {/* Voice */}
+          <button type="button" onClick={recording ? stopRecording : startRecording}
+            className={cn(
+              'flex size-8 items-center justify-center rounded-xl transition-all',
+              recording
+                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse'
+                : 'text-white/35 hover:bg-white/[0.08] hover:text-violet-400'
+            )}>
+            {recording ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+          </button>
+
+          {/* Deep research mode */}
+          <button type="button"
+            className="flex items-center gap-1.5 rounded-xl px-2 py-1 text-[11px] text-white/30 transition-all hover:bg-white/[0.08] hover:text-violet-400 ml-1">
+            <Zap className="size-3" />
+            <span className="font-mono">Deep</span>
+          </button>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Send / Stop */}
+          {streaming ? (
+            <button type="button" onClick={onStop}
+              className="flex size-9 items-center justify-center rounded-xl border border-white/[0.15] bg-white/[0.08] text-white/70 transition-all hover:bg-white/[0.14] hover:text-white">
+              <Square className="size-3.5 fill-current" />
             </button>
-            {isBusy ? (
-              <button
-                type="button"
-                onClick={onStop}
-                title="Stop generation"
-                className="flex size-8 items-center justify-center rounded-lg bg-secondary/80 text-foreground transition-all hover:bg-secondary"
-              >
-                <Square className="size-3.5 fill-current" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!value.trim()}
-                title="Send message (Enter)"
-                className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all enabled:hover:brightness-110 disabled:opacity-30"
-              >
-                <ArrowUp className="size-4" />
-              </button>
-            )}
-          </div>
+          ) : (
+            <button type="button" onClick={send}
+              disabled={!text.trim() && files.length === 0}
+              className={cn(
+                'flex size-9 items-center justify-center rounded-xl transition-all duration-200',
+                text.trim() || files.length > 0
+                  ? 'bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_16px_rgba(123,47,190,0.5)] hover:shadow-[0_4px_24px_rgba(123,47,190,0.7)] hover:scale-105 active:scale-95'
+                  : 'bg-white/[0.06] text-white/25 cursor-not-allowed'
+              )}>
+              <ArrowUp className="size-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Drag overlay */}
+      <AnimatePresence>
+        {dragOver && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-violet-500/60 bg-violet-500/10 backdrop-blur-sm">
+            <p className="text-sm font-medium text-violet-300">Drop files here</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

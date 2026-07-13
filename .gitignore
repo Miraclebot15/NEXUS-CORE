@@ -1,0 +1,20 @@
+
+# Backups and secrets - never commit
+*.bak
+*.bak2
+*.bak3
+*.bak4
+*.bak5
+*.bak6
+*.bak2clear
+backend/.env
+backend/.env.bak*
+frontend/.env.local
+backend/uploads/
+frontend/frontend.log
+backend/server.log
+frontend/next-env.d.ts
+backend/prompts.py
+backend/prompts.py
+backend/prompts.py
+backend/prompts.py

@@ -17,6 +17,9 @@ import type { NexusMessage } from '@/lib/use-nexus-workspace'
 import type { Timeline } from '@/lib/orchestration'
 import { Markdown } from './markdown'
 import { ThinkingPill } from './thinking-pill'
+import { SearchResults } from './search-results'
+import { MarkdownRenderer } from './markdown-renderer'
+import type { ArtifactItem } from '@/lib/orchestration'
 import { OrchestrationActions } from './orchestration-actions'
 import { cn } from '@/lib/utils'
 
@@ -55,6 +58,88 @@ function ActionButton({
   )
 }
 
+
+const COLLAPSE_THRESHOLD = 400 // chars
+
+function UserBubble({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = text.length > COLLAPSE_THRESHOLD
+  const displayed = isLong && !expanded ? text.slice(0, COLLAPSE_THRESHOLD) : text
+
+  return (
+    <div className="rounded-2xl rounded-tr-md border border-white/[0.09] bg-gradient-to-br from-white/[0.09] to-white/[0.05] backdrop-blur-md px-4 py-3 text-[15px] leading-relaxed text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_12px_rgba(0,0,0,0.3)] transition-all duration-200 hover:border-white/[0.14]">
+      {isLong ? (
+        <>
+          <span className="whitespace-pre-wrap break-words">{displayed}</span>
+          {!expanded && <span className="text-muted-foreground">...</span>}
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            className="mt-2 flex items-center gap-1.5 text-[12px] text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            <span>{expanded ? '▲ Show less' : '▼ Show more'}</span>
+          </button>
+        </>
+      ) : (
+        <span className="whitespace-pre-wrap break-words">{text}</span>
+      )}
+    </div>
+  )
+}
+
+function ImageArtifactInline({ url, prompt }: { url: string; prompt: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
+      {!loaded && !error && (
+        <div className="flex items-center justify-center h-48 gap-2 text-muted-foreground text-sm">
+          <div className="size-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+          Generating image...
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center justify-center h-24 text-muted-foreground text-sm">
+          Image unavailable
+        </div>
+      )}
+      <img
+        src={url}
+        alt={prompt}
+        className={`w-full max-h-[480px] object-contain transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0 h-0'}`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+      />
+      {loaded && (
+        <div className="px-3 py-2 border-t border-white/[0.06]">
+          <p className="text-[11px] text-muted-foreground truncate">{prompt}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function VideoEmbed({ url, title }: { url: string; title: string }) {
+  const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
+  if (!videoId) return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      className="mt-3 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-violet-400 hover:text-violet-300 transition-colors">
+      ▶ {title || 'Watch video'}
+    </a>
+  )
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.08] aspect-video">
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}`}
+        title={title}
+        className="w-full h-full"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  )
+}
+
 export function ChatMessage({
   message,
   timeline,
@@ -64,6 +149,7 @@ export function ChatMessage({
   canEdit,
   onRetry,
   onOpenContext,
+  onOpenArtifact,
   onRegenerate,
   onEditAndResend,
 }: {
@@ -75,6 +161,7 @@ export function ChatMessage({
   canEdit?: boolean
   onRetry?: () => void
   onOpenContext: () => void
+  onOpenArtifact?: (artifact: ArtifactItem) => void
   onRegenerate?: () => void
   onEditAndResend?: (newText: string) => void
 }) {
@@ -154,15 +241,13 @@ export function ChatMessage({
 
     return (
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         className="group flex justify-end"
       >
         <div className="flex max-w-[85%] flex-col items-end gap-1">
-          <div className="rounded-2xl rounded-tr-md border border-border bg-secondary/60 px-4 py-3 text-[15px] leading-relaxed text-foreground">
-            {text}
-          </div>
+          <UserBubble text={text} />
           {canEdit && (
             <button
               type="button"
@@ -189,8 +274,8 @@ export function ChatMessage({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 10, scale: 0.99 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       className="flex gap-3.5"
     >
@@ -198,7 +283,7 @@ export function ChatMessage({
       <div className="relative mt-0.5 shrink-0">
         <div
           className={cn(
-            'flex size-8 items-center justify-center rounded-lg border border-border bg-card',
+            'flex size-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm shadow-[0_0_12px_oklch(0.64_0.16_255/0.15)]',
             isActive && 'glow-primary',
             wasRejected && 'border-destructive/40',
           )}
@@ -215,6 +300,49 @@ export function ChatMessage({
       <div className="min-w-0 flex-1">
         {timeline && <OrchestrationActions timeline={timeline} isActive={isActive} />}
         {timeline && <ThinkingPill timeline={timeline} isActive={isActive} onOpenContext={onOpenContext} />}
+        {timeline && !isActive && timeline.artifacts.length > 0 && <SearchResults artifacts={timeline.artifacts} />}
+        {timeline && timeline.artifacts
+          .filter(a => a.artifactType === 'image')
+          .map((a, i) => {
+            try {
+              const c = typeof a.content === 'string' ? JSON.parse(a.content) : a.content as any
+              return c?.url ? <ImageArtifactInline key={i} url={c.url} prompt={c.prompt || a.title} /> : null
+            } catch { return null }
+          })
+        }
+        {timeline && !isActive && timeline.artifacts
+          .filter(a => a.artifactType === 'youtube_results')
+          .flatMap(a => {
+            const c = typeof a.content === 'string' ? JSON.parse(a.content) : a.content as any
+            return (c?.results || []).slice(0, 2).map((r: any, i: number) => (
+              <VideoEmbed key={i} url={r.url} title={r.title} />
+            ))
+          })
+        }
+        {timeline && !isActive && onOpenArtifact && timeline.artifacts
+          .filter(a => a.artifactType !== 'search_results' && a.artifactType !== 'youtube_results' && a.artifactType !== 'image')
+          .map((artifact, i) => (
+            <button key={i} type="button" onClick={() => onOpenArtifact(artifact)}
+              className="mt-2 flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground">
+              <span>📎</span>
+              <span className="truncate">{artifact.title}</span>
+            </button>
+          ))
+        }
+        {timeline && !isActive && onOpenArtifact && timeline.artifacts
+          .filter(a => a.artifactType !== 'search_results' && a.artifactType !== 'youtube_results')
+          .map((artifact, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onOpenArtifact(artifact)}
+              className="mt-2 flex items-center gap-2 rounded-lg border border-border/60 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+            >
+              <span>📎</span>
+              <span className="truncate">{artifact.title}</span>
+            </button>
+          ))
+        }
 
         {showEmptyStream ? (
           <div className="flex items-center gap-3 py-1.5">
@@ -230,7 +358,7 @@ export function ChatMessage({
           <div
             className={cn(
               wasRejected && 'rounded-xl border border-destructive/25 bg-destructive/[0.04] p-3',
-              wasExecuted && 'rounded-xl border border-[oklch(0.72_0.14_160)]/20 bg-[oklch(0.72_0.14_160)]/[0.03] p-3',
+              wasExecuted && 'rounded-xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-3',
             )}
           >
             <Markdown content={text} streaming={isStreaming} />

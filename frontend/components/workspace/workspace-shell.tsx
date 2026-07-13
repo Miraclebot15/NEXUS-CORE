@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAuth } from '@clerk/nextjs'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, RotateCcw, TriangleAlert, X } from 'lucide-react'
 import { AmbientBackground } from '@/components/ambient-background'
@@ -10,18 +9,19 @@ import { DEFAULT_MODEL_ID } from '@/lib/models'
 import { Sidebar } from './sidebar'
 import { TopBar, type Connection } from './top-bar'
 import { ContextPanel } from './context-panel'
+import { ArtifactPanel } from './artifact-panel'
 import { Composer } from './composer'
 import { ChatMessage } from './chat-message'
 import { Welcome } from './welcome'
 import { MemorySearch } from './memory-search'
 import { GovernanceLogs } from './governance-logs'
-import type { Timeline } from '@/lib/orchestration'
+import type { Timeline, ArtifactItem } from '@/lib/orchestration'
 
 type ReasoningMode = 'standard' | 'deep-research' | 'thinking' | 'brainstorming' | 'learning'
 
 export function WorkspaceShell() {
-  const { getToken } = useAuth()
-  const getTokenFn = useCallback(async () => (await getToken()) ?? null, [getToken])
+  // Auth bypassed for demo -- no Clerk dependency.
+  const getTokenFn = useCallback(async () => null, [])
 
   const workspace = useNexusWorkspace(getTokenFn)
   const {
@@ -55,6 +55,8 @@ export function WorkspaceShell() {
   const [mobileNav, setMobileNav] = useState(false)
   const [contextOpen, setContextOpen] = useState(false)
   const [contextTimelineId, setContextTimelineId] = useState<string | null>(null)
+  const [artifactOpen, setArtifactOpen] = useState(false)
+  const [selectedArtifact, setSelectedArtifact] = useState<ArtifactItem | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [governanceLogsOpen, setGovernanceLogsOpen] = useState(false)
 
@@ -208,6 +210,11 @@ export function WorkspaceShell() {
   const openContextFor = useCallback((messageId: string) => {
     setContextTimelineId(messageId)
     setContextOpen(true)
+  }, [])
+
+  const openArtifact = useCallback((artifact: ArtifactItem) => {
+    setSelectedArtifact(artifact)
+    setArtifactOpen(true)
   }, [])
 
   return (
@@ -366,6 +373,7 @@ export function WorkspaceShell() {
                         canEdit={m.role === 'user' && !isBusy}
                         onRetry={handleRetry}
                         onOpenContext={() => openContextFor(m.id)}
+                        onOpenArtifact={openArtifact}
                         onRegenerate={m.id === lastAssistantId && !isBusy ? () => regenerate() : undefined}
                         onEditAndResend={(newText) => editAndResend(m.id, newText)}
                       />
@@ -493,6 +501,23 @@ export function WorkspaceShell() {
               </motion.aside>
             )}
           </AnimatePresence>
+
+          {/* Desktop artifact panel */}
+          <AnimatePresence initial={false}>
+            {artifactOpen && selectedArtifact && (
+              <motion.aside
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 420, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                className="hidden shrink-0 overflow-hidden border-l border-border glass lg:block"
+              >
+                <div className="h-full w-[420px]">
+                  <ArtifactPanel artifact={selectedArtifact} onClose={() => setArtifactOpen(false)} />
+                </div>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -515,6 +540,30 @@ export function WorkspaceShell() {
               className="fixed inset-y-0 right-0 z-50 w-[88vw] max-w-sm border-l border-border glass-strong lg:hidden"
             >
               <ContextPanel timeline={openContextTimeline} onClose={() => setContextOpen(false)} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile artifact overlay */}
+      <AnimatePresence>
+        {artifactOpen && selectedArtifact && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setArtifactOpen(false)}
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+            />
+            <motion.aside
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+              className="fixed inset-y-0 right-0 z-50 w-[92vw] max-w-md border-l border-border glass-strong lg:hidden"
+            >
+              <ArtifactPanel artifact={selectedArtifact} onClose={() => setArtifactOpen(false)} />
             </motion.aside>
           </>
         )}

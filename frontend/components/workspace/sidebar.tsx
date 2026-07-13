@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { useUser, UserButton } from '@clerk/nextjs'
 import {
   ChevronDown,
   ChevronsLeft,
@@ -145,7 +144,6 @@ export function Sidebar({
   onOpenGovernanceLogs: () => void
   chainValid: boolean | null
 }) {
-  const { user } = useUser()
   const activeProject = projects.find((p) => p.id === activeProjectId)
 
   const projectSections: MenuSection[] = [
@@ -290,14 +288,12 @@ export function Sidebar({
       {/* Footer: real audit chain status + Clerk user */}
       <div className="mt-1 space-y-1 border-t border-border pt-2">
         <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-          <UserButton
-            appearance={{
-              elements: { userButtonAvatarBox: 'size-8' },
-            }}
-          />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-muted-foreground">
+            U
+          </div>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate text-sm font-medium">
-              {user?.fullName || user?.primaryEmailAddress?.emailAddress || 'Signed in'}
+              {'Signed in'}
             </div>
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
               {chainValid === null ? (

@@ -54,45 +54,40 @@
 
 :root {
   color-scheme: dark;
-  --radius: 0.6rem;
-
-  /* Near-black neutral base -- carbon, not a blue/purple-tinted "AI" black */
-  --background: oklch(0.145 0.006 264);
+  --background: oklch(0.08 0.01 270);
   --foreground: oklch(0.96 0.002 260);
 
-  --card: oklch(0.185 0.007 264);
+  --card: oklch(0.12 0.015 270);
   --card-foreground: oklch(0.96 0.002 260);
-  --popover: oklch(0.17 0.007 264);
+  --popover: oklch(0.10 0.012 270);
   --popover-foreground: oklch(0.96 0.002 260);
 
-  /* One primary accent, used for "live / active" states only */
-  --primary: oklch(0.64 0.16 255);
+  /* Purple primary accent */
+  --primary: oklch(0.60 0.22 295);
   --primary-foreground: oklch(0.99 0 0);
 
-  --secondary: oklch(0.24 0.007 264);
+  --secondary: oklch(0.18 0.015 270);
   --secondary-foreground: oklch(0.95 0.002 260);
 
-  --muted: oklch(0.23 0.006 264);
-  --muted-foreground: oklch(0.66 0.012 258);
+  --muted: oklch(0.16 0.01 270);
+  --muted-foreground: oklch(0.58 0.018 270);
 
-  /* Accent is repurposed with real meaning: "correction in progress"
-     (same hue as --warning) rather than a second decorative gradient hue. */
-  --accent: oklch(0.78 0.13 82);
-  --accent-foreground: oklch(0.14 0.01 82);
+  --accent: oklch(0.55 0.20 240);
+  --accent-foreground: oklch(0.99 0 0);
 
   --destructive: oklch(0.62 0.2 22);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.72 0.14 160);
   --warning: oklch(0.78 0.13 82);
 
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.64 0.16 255);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.60 0.22 295);
 
-  --sidebar: oklch(0.155 0.007 264);
-  --sidebar-foreground: oklch(0.9 0.003 260);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-accent: oklch(0.24 0.007 264);
+  --sidebar: oklch(0.09 0.012 270);
+  --sidebar-foreground: oklch(0.88 0.005 260);
+  --sidebar-border: oklch(1 0 0 / 6%);
+  --sidebar-accent: oklch(0.16 0.015 270);
 }
 
 @layer base {
@@ -298,4 +293,19 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+@keyframes orb-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(60px, -40px) scale(1.1); }
+  66% { transform: translate(-30px, 50px) scale(0.95); }
+}
+@keyframes orb-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-50px, 60px) scale(0.9); }
+  66% { transform: translate(40px, -30px) scale(1.08); }
+}
+@keyframes typing-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }

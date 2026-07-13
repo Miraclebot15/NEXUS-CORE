@@ -107,6 +107,18 @@ CREATE TABLE IF NOT EXISTS artifacts (
     FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_task ON artifacts(task_id);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token         TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL,
+    email         TEXT NOT NULL,
+    name          TEXT,
+    picture       TEXT,
+    created_at    TEXT NOT NULL,
+    expires_at    TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 """
 
 _GENESIS_HASH = "0" * 64
@@ -380,6 +392,32 @@ def list_messages(conversation_id: str, limit: int = 200) -> list[dict]:
     ]
 
 
+def list_messages_for_history(conversation_id: str, limit: int = 200) -> list[dict]:
+    """
+    Same as list_messages, but excludes any message whose task ended in
+    FAILED_PROPOSAL or FAILED_CORRECTION (i.e. Qwen Cloud itself rejected the
+    request, e.g. content-moderation blocks). Prevents one flagged message
+    from poisoning every future turn in the same conversation by getting
+    silently re-sent as context on every subsequent call. The message still
+    shows in the regular chat log (via list_messages) -- this is only for
+    building the `history` payload sent back to the model.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT m.id, m.conversation_id, m.role, m.content, m.task_id, m.created_at
+               FROM messages m
+               LEFT JOIN tasks t ON m.task_id = t.id
+               WHERE m.conversation_id = ?
+                 AND (t.final_status IS NULL OR t.final_status NOT IN ('FAILED_PROPOSAL', 'FAILED_CORRECTION'))
+               ORDER BY m.created_at ASC LIMIT ?""",
+            (conversation_id, limit),
+        ).fetchall()
+    return [
+        {"id": r[0], "conversation_id": r[1], "role": r[2], "content": r[3], "task_id": r[4], "created_at": r[5]}
+        for r in rows
+    ]
+
+
 def search_messages(user_id: str, query: str, limit: int = 20) -> list[dict]:
     """
     Hackathon-grade 'semantic memory': FTS5 full-text relevance search over a
@@ -546,3 +584,29 @@ def delete_messages_from(conversation_id: str, user_id: str, message_id: str) ->
         )
         conn.commit()
     return True
+
+
+def create_session(token: str, user_id: str, email: str, name: str, picture: str, expires_at: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO sessions (token, user_id, email, name, picture, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (token, user_id, email, name, picture, _now(), expires_at)
+        )
+
+def get_session(token: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT token, user_id, email, name, picture, created_at, expires_at FROM sessions WHERE token = ?",
+            (token,)
+        ).fetchone()
+    if not row:
+        return None
+    return {"token": row[0], "user_id": row[1], "email": row[2], "name": row[3], "picture": row[4], "created_at": row[5], "expires_at": row[6]}
+
+def delete_session(token: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+
+def cleanup_expired_sessions() -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE expires_at < ?", (_now(),))

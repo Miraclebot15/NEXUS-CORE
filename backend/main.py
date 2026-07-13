@@ -13,13 +13,15 @@ The Orchestration Layer's HTTP surface. Routes:
 import asyncio
 import json
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+import os
+import shutil
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import database
-from auth import get_current_user_id
+from auth import get_current_user_id, get_google_auth_url, exchange_code_for_user, create_user_session, generate_state
 from config import settings
 from models import (
     ArtifactOut,
@@ -31,16 +33,64 @@ from models import (
     ProjectOut,
 )
 from orchestrator import run_pipeline
+from security import SecurityMiddleware, sanitize_prompt, sanitize_stream_error
 
 app = FastAPI(title="NEXUS CORE", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://43.98.186.150:3000",
+        "http://nexus-core-app.duckdns.org:3000",
+    ],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_credentials=True,
 )
+app.add_middleware(SecurityMiddleware)
 
+
+# In-memory state store for OAuth CSRF protection
+_oauth_states: dict[str, float] = {}
+
+@app.get("/auth/google/login")
+async def google_login():
+    import time
+    state = generate_state()
+    _oauth_states[state] = time.time() + 600  # 10 min expiry
+    # Cleanup old states
+    now = time.time()
+    expired = [k for k, v in _oauth_states.items() if v < now]
+    for k in expired:
+        del _oauth_states[k]
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(get_google_auth_url(state))
+
+@app.get("/auth/google/callback")
+async def google_callback(code: str = Query(...), state: str = Query(...)):
+    import time
+    from fastapi.responses import RedirectResponse
+    # Validate state to prevent CSRF
+    if state not in _oauth_states or _oauth_states[state] < time.time():
+        _oauth_states.pop(state, None)
+        raise HTTPException(status_code=400, detail="Invalid or expired state.")
+    del _oauth_states[state]
+    google_user = await exchange_code_for_user(code)
+    token = create_user_session(google_user)
+    frontend_url = f"http://nexus-core-app.duckdns.org:3000/auth/callback?token={token}"
+    return RedirectResponse(frontend_url)
+
+@app.get("/auth/logout")
+async def logout(authorization: str | None = None):
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        database.delete_session(token)
+    return {"ok": True}
+
+@app.get("/auth/me")
+async def me(user_id: str = Depends(get_current_user_id)):
+    return {"user_id": user_id}
 
 @app.on_event("startup")
 def _startup() -> None:
@@ -163,6 +213,10 @@ async def stream_task(
     conversation_id: str | None = Query(default=None),
     user_id: str = Depends(get_current_user_id),
 ):
+    valid, reason = sanitize_prompt(prompt)
+    if not valid:
+        from fastapi.responses import JSONResponse as JR
+        return JR(status_code=400, content={"error": reason})
     database.get_or_create_user(user_id)
     resolved_conversation_id = _get_or_bootstrap_conversation(user_id, conversation_id)
 
@@ -182,7 +236,8 @@ async def stream_task(
                 yield f"event: {event.stage}\ndata: {payload}\n\n"
                 await asyncio.sleep(0)  # yield control so the client receives it immediately
         except Exception as exc:  # noqa: BLE001 - never let the stream die silently
-            error_payload = json.dumps({"error": str(exc)})
+            safe_msg = sanitize_stream_error(exc)
+            error_payload = json.dumps({"error": safe_msg})
             yield f"event: STREAM_ERROR\ndata: {error_payload}\n\n"
         finally:
             yield "event: STREAM_END\ndata: {}\n\n"
@@ -233,6 +288,52 @@ def get_artifact(artifact_id: str, user_id: str = Depends(get_current_user_id)):
         raise HTTPException(status_code=404, detail="Artifact not found.")
     return artifact
 
+
+# --------------------------------------------------------------------------
+# File upload endpoint
+# --------------------------------------------------------------------------
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".csv", ".txt", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov"}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
+@app.post("/api/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
+    import uuid
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="File type not supported.")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Max 50MB.")
+
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    return {
+        "file_id": safe_name,
+        "original_name": file.filename,
+        "size": len(content),
+        "ext": ext,
+        "path": file_path,
+    }
+
+@app.delete("/api/upload/{file_id}")
+async def delete_upload(file_id: str, user_id: str = Depends(get_current_user_id)):
+    import re
+    if not re.match(r'^[a-f0-9]{32}\.[a-z0-9]+$', file_id):
+        raise HTTPException(status_code=400, detail="Invalid file ID.")
+    file_path = os.path.join(UPLOAD_DIR, file_id)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    return {"ok": True}
 
 # --------------------------------------------------------------------------
 # Audit / health

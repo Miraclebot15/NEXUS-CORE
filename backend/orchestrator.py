@@ -15,7 +15,30 @@ happened during a run.
 from typing import AsyncGenerator
 
 import database
-from agents import run_ella, run_jane
+import re
+
+def _sanitize_search_content(text: str) -> str:
+    """Strip prompt injection attempts from external search content."""
+    injection_patterns = [
+        re.compile(r"ignore (previous|all|above|prior) instructions?", re.IGNORECASE),
+        re.compile(r"disregard (previous|all|above|prior)", re.IGNORECASE),
+        re.compile(r"you are now", re.IGNORECASE),
+        re.compile(r"new (persona|role|instructions|rules)", re.IGNORECASE),
+        re.compile(r"system prompt", re.IGNORECASE),
+        re.compile(r"jailbreak", re.IGNORECASE),
+        re.compile(r"act as (if|though)", re.IGNORECASE),
+        re.compile(r"pretend (you are|to be)", re.IGNORECASE),
+        re.compile(r"<\|.*?\|>"),
+        re.compile(r"\[INST\]|\[/INST\]"),
+        re.compile(r"###\s*(instruction|system|prompt)", re.IGNORECASE),
+        re.compile(r"exfiltrate|dump (the )?(env|config|keys|secrets)", re.IGNORECASE),
+    ]
+    for pattern in injection_patterns:
+        text = pattern.sub("[redacted]", text)
+    return text
+
+from agents import run_ella, run_jane, run_synthesis
+from router import route_task
 from config import settings
 from execution import simulate_execution
 from governance import evaluate_plan
@@ -39,7 +62,7 @@ async def run_pipeline(
     # Snapshot prior turns BEFORE adding the new user message, so ELLA gets
     # everything that came before this task but not a duplicate of it.
     # Capped at the most recent 20 messages to bound prompt size.
-    prior_messages = database.list_messages(conversation_id, limit=1000)[-20:]
+    prior_messages = database.list_messages_for_history(conversation_id, limit=1000)[-20:]
     history = [{"role": m["role"], "content": m["content"]} for m in prior_messages]
 
     database.add_message(conversation_id, "user", prompt, task_id=task_id)
@@ -47,7 +70,8 @@ async def run_pipeline(
     yield _emit(task_id, "INTAKE", "Task received", {"task_id": task_id, "prompt": prompt})
 
     # --- Stage 1: ELLA proposes a plan -------------------------------------
-    ella_result = await run_ella(prompt, history=history)
+    route = route_task(prompt)
+    ella_result = await run_ella(prompt, history=history, model_override=route.ella_model)
     yield _emit(
         task_id,
         "ELLA_PROPOSE",
@@ -146,9 +170,13 @@ async def run_pipeline(
 
     final_status = "EXECUTED" if execution_result.success else "EXECUTION_FAILED"
     database.update_task_status(task_id, final_status)
+
+    final_answer = await run_synthesis(prompt, current_plan, execution_result.model_dump(), model_override=route.model)
+    yield _emit(task_id, "SYNTHESIS", "Final answer generated", {"answer": final_answer})
+
     database.add_message(
         conversation_id, "assistant",
-        current_plan.plan_summary or "Task completed.",
+        final_answer,
         task_id=task_id,
     )
 

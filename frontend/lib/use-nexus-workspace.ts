@@ -53,7 +53,16 @@ function messageFromApi(m: api.MessageOut): NexusMessage {
  *  full assistant message is refetched from the backend on completion. */
 function describeInProgress(timeline: Timeline): string {
   const last = timeline.events[timeline.events.length - 1]
-  return last ? last.detail : 'Working\u2026'
+  if (!last) return 'Working\u2026'
+  const STAGE_LABELS: Record<string, string> = {
+    INTAKE: 'Receiving task\u2026',
+    ELLA_PROPOSE: 'Planning\u2026',
+    GOVERNANCE_CHECK: 'Checking governance\u2026',
+    EXECUTION: 'Executing\u2026',
+    SYNTHESIS: 'Generating answer\u2026',
+    TERMINAL: 'Finishing up\u2026',
+  }
+  return STAGE_LABELS[last.stage] ?? last.label ?? 'Working\u2026'
 }
 
 /** Derives a short conversation title from the first message, the way

@@ -1,70 +1,66 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-
-/**
- * Ambient backdrop: a faint schematic grid (a control-room/blueprint motif)
- * plus a restrained cursor-reactive spotlight and vignette.
- *
- * This previously rendered three large, blurred, drifting color blobs
- * ("mesh gradient" blobs) in primary/accent hues -- a very recognizable
- * default-AI-generated-UI look. Replaced with a single monochrome grid
- * texture and one single-hue spotlight, which reads as an instrument panel
- * rather than a marketing hero background.
- */
 export function AmbientBackground() {
-  const glowRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = glowRef.current
-    if (!el) return
-
-    const fine = window.matchMedia('(pointer: fine)').matches
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!fine || reduced) return
-
-    let frame = 0
-    const onMove = (e: PointerEvent) => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        el.style.setProperty('--mx', `${e.clientX}px`)
-        el.style.setProperty('--my', `${e.clientY}px`)
-      })
-    }
-    window.addEventListener('pointermove', onMove, { passive: true })
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      cancelAnimationFrame(frame)
-    }
-  }, [])
-
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      {/* Base wash */}
-      <div className="absolute inset-0 bg-background" />
+    <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
+      {/* Base — very dark purple-black */}
+      <div className="absolute inset-0" style={{ background: '#07000f' }} />
 
-      {/* Faint drifting schematic grid */}
-      <div className="schematic-grid animate-grid-drift absolute inset-0 opacity-60" />
-
-      {/* Single-hue cursor spotlight (a radial vignette, not a multi-hue gradient) */}
-      <div
-        ref={glowRef}
-        className="absolute inset-0 opacity-60 transition-opacity duration-500"
+      {/* Central purple bloom */}
+      <div className="absolute rounded-full"
         style={{
-          background:
-            'radial-gradient(600px circle at var(--mx, 50%) var(--my, 30%), color-mix(in oklch, var(--primary) 9%, transparent), transparent 60%)',
+          width: '120vw', height: '120vw',
+          maxWidth: 1000, maxHeight: 1000,
+          top: '50%', left: '50%',
+          transform: 'translate(-50%, -60%)',
+          background: 'radial-gradient(circle, rgba(123,47,190,0.22) 0%, rgba(79,70,229,0.10) 35%, transparent 65%)',
+          filter: 'blur(40px)',
+          animation: 'breathe 8s ease-in-out infinite',
         }}
       />
 
-      {/* Edge vignette for depth */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,oklch(0.1_0.01_264/0.6)_100%)]" />
-
-      {/* Fine grain texture */}
-      <div
-        className="absolute inset-0 opacity-[0.035] mix-blend-soft-light"
+      {/* Top-left magenta accent */}
+      <div className="absolute rounded-full"
         style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+          width: '60vw', height: '60vw',
+          maxWidth: 500, maxHeight: 500,
+          top: '-10%', left: '-5%',
+          background: 'radial-gradient(circle, rgba(192,38,211,0.18) 0%, transparent 65%)',
+          filter: 'blur(60px)',
+          animation: 'orb-drift-1 20s ease-in-out infinite',
+        }}
+      />
+
+      {/* Bottom-right blue accent */}
+      <div className="absolute rounded-full"
+        style={{
+          width: '55vw', height: '55vw',
+          maxWidth: 480, maxHeight: 480,
+          bottom: '-5%', right: '-5%',
+          background: 'radial-gradient(circle, rgba(79,70,229,0.20) 0%, transparent 65%)',
+          filter: 'blur(60px)',
+          animation: 'orb-drift-2 25s ease-in-out infinite',
+        }}
+      />
+
+      {/* Bottom center warm glow */}
+      <div className="absolute rounded-full"
+        style={{
+          width: '70vw', height: '40vw',
+          maxWidth: 600, maxHeight: 300,
+          bottom: '-5%', left: '15%',
+          background: 'radial-gradient(ellipse, rgba(139,92,246,0.12) 0%, transparent 70%)',
+          filter: 'blur(50px)',
+        }}
+      />
+
+      {/* Noise grain */}
+      <div className="absolute inset-0"
+        style={{
+          opacity: 0.04,
+          backgroundImage: "url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.75%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')",
+          backgroundSize: '200px 200px',
+          mixBlendMode: 'overlay',
         }}
       />
     </div>
