@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXUS CORE</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#07000f;--surface:rgba(255,255,255,0.05);--surface-high:rgba(255,255,255,0.08);--border:rgba(255,255,255,0.08);--border-high:rgba(255,255,255,0.14);--primary:#7B2FBE;--primary-glow:rgba(123,47,190,0.4);--secondary:#C026D3;--accent:#4F46E5;--text:rgba(255,255,255,0.92);--text-dim:rgba(255,255,255,0.45);--text-mute:rgba(255,255,255,0.22);--success:#10B981;--danger:#EF4444;}
+*{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden;}
+.orb{position:fixed;border-radius:50%;pointer-events:none;filter:blur(80px);z-index:0;}
+.orb-1{width:60vw;height:60vw;max-width:700px;max-height:700px;top:-20%;left:-10%;background:radial-gradient(circle,rgba(123,47,190,0.25),transparent 70%);animation:drift1 20s ease-in-out infinite;}
+.orb-2{width:55vw;height:55vw;max-width:650px;max-height:650px;bottom:-15%;right:-10%;background:radial-gradient(circle,rgba(79,70,229,0.22),transparent 70%);animation:drift2 25s ease-in-out infinite;}
+.orb-3{width:40vw;height:40vw;max-width:500px;max-height:500px;top:30%;left:20%;background:radial-gradient(circle,rgba(192,38,211,0.10),transparent 70%);animation:drift1 35s ease-in-out infinite reverse;}
+@keyframes drift1{0%,100%{transform:translate(0,0)}33%{transform:translate(40px,-30px)}66%{transform:translate(-20px,40px)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}33%{transform:translate(-50px,40px)}66%{transform:translate(30px,-25px)}}
+@keyframes breathe{0%,100%{opacity:0.8;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+.nexus-orb{border-radius:50%;background:radial-gradient(circle at 35% 30%,#C026D3,#7B2FBE 50%,#4F46E5 85%);box-shadow:0 0 30px rgba(192,38,211,0.5),0 0 60px rgba(123,47,190,0.25),inset 0 0 15px rgba(255,255,255,0.1);animation:breathe 4s ease-in-out infinite;position:relative;}
+.glass{background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);}
+.sidebar{width:260px;min-width:260px;transition:width 0.3s cubic-bezier(0.34,1.56,0.64,1),min-width 0.3s cubic-bezier(0.34,1.56,0.64,1),opacity 0.2s;}
+.sidebar.collapsed{width:0;min-width:0;opacity:0;overflow:hidden;}
+.composer-wrap{background:rgba(15,10,25,0.85);backdrop-filter:blur(30px);border:1px solid rgba(255,255,255,0.10);border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.07);}
+.send-btn{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--primary),#6D28D9);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 4px 14px rgba(123,47,190,0.45);}
+</style>
+</head>
+<body x-data="nexusApp()" x-init="init()">
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+<div class="relative z-10 flex h-screen w-screen overflow-hidden">
+
+<!-- SIDEBAR -->
+<aside :class="sidebarOpen?'sidebar':'sidebar collapsed'" class="flex flex-col h-full border-r" style="border-color:var(--border);background:rgba(7,0,15,0.7);backdrop-filter:blur(20px);">
+  <div class="flex items-center gap-3 px-4 py-5">
+    <div class="relative flex-shrink-0" style="width:32px;height:32px;">
+      <div class="nexus-orb" style="width:32px;height:32px;box-shadow:0 0 16px rgba(192,38,211,0.5);">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><span style="font-size:13px;font-weight:900;color:white;">N</span></div>
+      </div>
+    </div>
+    <span class="font-black text-sm gradient-text tracking-tight">NEXUS CORE</span>
+  </div>
+  <div class="px-3 mb-3">
+    <button @click="newChat()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95" style="background:rgba(123,47,190,0.15);border:1px solid rgba(123,47,190,0.3);color:#C084FC;">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Chat
+    </button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="flex flex-col flex-1 min-w-0 h-full">
+  <header class="flex items-center gap-3 px-4 h-14 flex-shrink-0 border-b" style="border-color:var(--border);background:rgba(7,0,15,0.6);backdrop-filter:blur(20px);">
+    <button @click="sidebarOpen=!sidebarOpen" class="tool-btn">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <span class="text-sm font-semibold flex-1 truncate" style="color:var(--text-dim);" x-text="activeTitle||'NEXUS CORE'"></span>
+  </header>
+
+  <div class="flex-1 overflow-y-auto p-6" x-ref="chatScroll">
+    <!-- Chat content will go here -->
+  </div>
+
+  <!-- COMPOSER -->
+  <div class="flex-shrink-0 px-4 pb-4 pt-2" style="background:linear-gradient(to top,rgba(7,0,15,0.95) 80%,transparent);">
+    <div class="max-w-3xl mx-auto">
+      <div class="composer-wrap px-3 pt-3 pb-2">
+        <textarea x-model="inputText" rows="1" placeholder="Ask anything..." class="w-full bg-transparent text-sm leading-relaxed"></textarea>
+        <button @click="sendMessage()" class="send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function nexusApp(){return{
+  sidebarOpen:true,
+  messages:[],
+  inputText:'',
+  activeTitle:'NEXUS CORE',
+
+  sendMessage(){
+    if(!this.inputText.trim()) return;
+    this.messages.push({role:'user',content:this.inputText});
+    this.inputText = '';
+    // Demo
+    setTimeout(() => {
+      this.messages.push({role:'assistant',content:'Demo response from NEXUS CORE.'});
+    }, 600);
+  }
+}}
+</script>
+</body>
+</html>

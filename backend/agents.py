@@ -262,7 +262,7 @@ def _sanitize_execution_for_synthesis(execution_result: dict) -> str:
         else:
             parts.append(f"Artifact: {title}")
 
-    clean_logs = [_clean(l) for l in logs if "[SANDBOX]" not in l]
+    clean_logs = [_clean(l) for l in logs if "FAILED" in l or "OK" in l]
     if clean_logs:
         parts.append("Notes: " + "; ".join(clean_logs[:3]))
 

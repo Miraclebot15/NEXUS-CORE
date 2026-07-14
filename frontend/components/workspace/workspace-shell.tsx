@@ -356,7 +356,7 @@ export function WorkspaceShell() {
                   </button>
                 </div>
               ) : messages.length === 0 ? (
-                <Welcome onSelect={handleSend} />
+                <Welcome onSend={handleSend} />
               ) : (
                 <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
                   {messages.map((m) => {
@@ -474,12 +474,6 @@ export function WorkspaceShell() {
                 <Composer
                   onSend={handleSend}
                   onStop={handleStop}
-                  onOpenSearch={() => setSearchOpen(true)}
-                  isBusy={isBusy}
-                  reasoningMode={reasoningMode}
-                  onSelectReasoningMode={setReasoningMode}
-                  selectedModel={selectedModel}
-                  onSelectModel={setSelectedModel}
                 />
               </div>
             </div>

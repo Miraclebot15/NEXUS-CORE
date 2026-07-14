@@ -16,6 +16,7 @@ from tools import web_search, youtube_search, image_generate, video_understand, 
 async def simulate_execution(plan: ExecutionPlan) -> ExecutionResult:
     logs: list[str] = []
     artifacts: list[dict] = []
+    had_failure = False
 
     if not plan or not plan.steps:
         return ExecutionResult(success=False, logs=["No steps to execute."], artifacts=[])
@@ -136,4 +137,5 @@ async def simulate_execution(plan: ExecutionPlan) -> ExecutionResult:
             logs.append(f"[SANDBOX] Step {step.step_id}: completed OK (simulated).")
 
     logs.append("[SANDBOX] Execution context torn down. No persistent side effects outside declared artifacts.")
-    return ExecutionResult(success=True, logs=logs, artifacts=artifacts)
+    had_failure = any("FAILED" in l for l in logs)
+    return ExecutionResult(success=not had_failure, logs=logs, artifacts=artifacts)

@@ -14,7 +14,7 @@ import {
   Telescope,
   X,
 } from 'lucide-react'
-import type { SearchResultsContent, Timeline } from '@/lib/orchestration'
+import type { SearchResultsContent, Timeline, ArtifactItem } from '@/lib/orchestration'
 import { cn } from '@/lib/utils'
 
 type Tab = 'reasoning' | 'research' | 'execution' | 'governance' | 'artifacts'

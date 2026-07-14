@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXUS CORE</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#07000f;--surface:rgba(255,255,255,0.05);--surface-high:rgba(255,255,255,0.08);--border:rgba(255,255,255,0.08);--border-high:rgba(255,255,255,0.14);--primary:#7B2FBE;--primary-glow:rgba(123,47,190,0.4);--secondary:#C026D3;--accent:#4F46E5;--text:rgba(255,255,255,0.92);--text-dim:rgba(255,255,255,0.45);--text-mute:rgba(255,255,255,0.22);--success:#10B981;--danger:#EF4444;}
+*{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden;}
+.orb{position:fixed;border-radius:50%;pointer-events:none;filter:blur(80px);z-index:0;}
+.orb-1{width:60vw;height:60vw;max-width:700px;max-height:700px;top:-20%;left:-10%;background:radial-gradient(circle,rgba(123,47,190,0.25),transparent 70%);animation:drift1 20s ease-in-out infinite;}
+.orb-2{width:55vw;height:55vw;max-width:650px;max-height:650px;bottom:-15%;right:-10%;background:radial-gradient(circle,rgba(79,70,229,0.22),transparent 70%);animation:drift2 25s ease-in-out infinite;}
+.orb-3{width:40vw;height:40vw;max-width:500px;max-height:500px;top:30%;left:20%;background:radial-gradient(circle,rgba(192,38,211,0.10),transparent 70%);animation:drift1 35s ease-in-out infinite reverse;}
+@keyframes drift1{0%,100%{transform:translate(0,0)}33%{transform:translate(40px,-30px)}66%{transform:translate(-20px,40px)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}33%{transform:translate(-50px,40px)}66%{transform:translate(30px,-25px)}}
+@keyframes breathe{0%,100%{opacity:0.8;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+@keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.85)}}
+@keyframes slide-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cursor-blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+@keyframes progress-slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+@keyframes img-reveal{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
+.glass{background:var(--surface);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px;}
+.sidebar{width:260px;min-width:260px;transition:width 0.3s cubic-bezier(0.34,1.56,0.64,1),min-width 0.3s cubic-bezier(0.34,1.56,0.64,1),opacity 0.2s;}
+.sidebar.collapsed{width:0;min-width:0;opacity:0;overflow:hidden;}
+.msg-enter{animation:slide-in 0.35s cubic-bezier(0.22,1,0.36,1) both;}
+.pipeline-step{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.pipeline-step:last-child{border-bottom:none;}
+.progress-bar{height:3px;background:rgba(255,255,255,0.08);border-radius:9999px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));animation:progress-slide 1.4s ease-in-out infinite;border-radius:9999px;}
+.nexus-orb{border-radius:50%;background:radial-gradient(circle at 35% 30%,#C026D3,#7B2FBE 50%,#4F46E5 85%);box-shadow:0 0 30px rgba(192,38,211,0.5),0 0 60px rgba(123,47,190,0.25),inset 0 0 15px rgba(255,255,255,0.1);animation:breathe 4s ease-in-out infinite;position:relative;}
+.nexus-orb::after{content:'';position:absolute;top:18%;left:22%;width:26%;height:18%;background:rgba(255,255,255,0.4);filter:blur(4px);border-radius:50%;transform:rotate(-30deg);}
+.orb-ring{border-radius:50%;position:absolute;animation:spin-slow 6s linear infinite;}
+.source-card{display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:10px;cursor:pointer;transition:all 0.2s;text-decoration:none;}
+.source-card:hover{background:rgba(255,255,255,0.07);border-color:rgba(123,47,190,0.3);}
+.code-block{background:#0d1117;border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden;margin:12px 0;}
+.code-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);}
+.code-body{padding:14px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;color:rgba(255,255,255,0.88);}
+.gen-image{width:100%;max-height:420px;object-fit:contain;border-radius:12px;border:1px solid rgba(255,255,255,0.08);animation:img-reveal 0.5s cubic-bezier(0.22,1,0.36,1);}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:9999px;font-size:12px;color:var(--text-dim);cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+.chip:hover{background:rgba(123,47,190,0.15);border-color:rgba(123,47,190,0.4);color:var(--text);}
+.chip:active{transform:scale(0.95);}
+.composer-wrap{background:rgba(15,10,25,0.85);backdrop-filter:blur(30px);border:1px solid rgba(255,255,255,0.10);border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.07);transition:border-color 0.2s,box-shadow 0.2s;}
+.composer-wrap:focus-within{border-color:rgba(123,47,190,0.35);box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 0 3px rgba(123,47,190,0.08),inset 0 1px 0 rgba(255,255,255,0.07);}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;transition:background 0.15s;font-size:13px;color:var(--text-dim);white-space:nowrap;overflow:hidden;}
+.sidebar-item:hover{background:rgba(255,255,255,0.06);color:var(--text);}
+.sidebar-item.active{background:rgba(123,47,190,0.15);color:#C084FC;}
+.pipeline-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-left:3px solid var(--primary);border-radius:10px;font-size:12px;cursor:pointer;transition:all 0.2s;}
+.pipeline-pill:hover{background:rgba(123,47,190,0.1);}
+.badge-approved{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#34D399;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;}
+.badge-blocked{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#F87171;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;}
+.badge-tool{background:rgba(123,47,190,0.12);border:1px solid rgba(123,47,190,0.3);color:#C084FC;padding:2px 8px;border-radius:9999px;font-size:11px;}
+.send-btn{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--primary),#6D28D9);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 4px 14px rgba(123,47,190,0.45);}
+.send-btn:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(123,47,190,0.6);}
+.send-btn:active{transform:scale(0.93);}
+.send-btn:disabled{background:rgba(255,255,255,0.08);box-shadow:none;cursor:not-allowed;}
+.tool-btn{width:32px;height:32px;border-radius:10px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-mute);transition:all 0.18s cubic-bezier(0.34,1.56,0.64,1);}
+.tool-btn:hover{background:rgba(255,255,255,0.07);color:#C084FC;transform:scale(1.1);}
+.tool-btn:active{transform:scale(0.9);}
+.gradient-text{background:linear-gradient(135deg,#fff 0%,#e0d7ff 40%,#c084fc 70%,#f0abfc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.typing-cursor{display:inline-block;width:2px;height:16px;background:#C026D3;border-radius:1px;animation:cursor-blink 1s steps(1) infinite;vertical-align:middle;margin-left:2px;}
+textarea{resize:none;outline:none;}
+textarea::placeholder{color:var(--text-mute);}
+</style>
+</head>
+<body x-data="nexusApp()" x-init="init()">
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+<div class="relative z-10 flex h-screen w-screen overflow-hidden">
+<aside :class="sidebarOpen?'sidebar':'sidebar collapsed'" class="flex flex-col h-full border-r" style="border-color:var(--border);background:rgba(7,0,15,0.7);backdrop-filter:blur(20px);">
+  <div class="flex items-center gap-3 px-4 py-5">
+    <div class="relative flex-shrink-0" style="width:32px;height:32px;">
+      <div class="nexus-orb" style="width:32px;height:32px;box-shadow:0 0 16px rgba(192,38,211,0.5);">
+        <div class="orb-ring" style="width:38px;height:38px;top:-3px;left:-3px;border:1.5px solid rgba(192,38,211,0.5);"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><span style="font-size:13px;font-weight:900;color:white;">N</span></div>
+      </div>
+    </div>
+    <span class="font-black text-sm gradient-text tracking-tight">NEXUS CORE</span>
+  </div>
+  <div class="px-3 mb-3">
+    <button @click="newChat()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95" style="background:rgba(123,47,190,0.15);border:1px solid rgba(123,47,190,0.3);color:#C084FC;">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Chat
+    </button>
+  </div>
+  <div class="flex-1 overflow-y-auto px-3 space-y-1 pb-4">
+    <p class="text-xs font-medium px-2 mb-2" style="color:var(--text-mute);letter-spacing:0.08em;text-transform:uppercase;">Recent</p>
+    <template x-for="conv in conversations" :key="conv.id">
+      <div @click="selectConversation(conv.id)" :class="activeConversationId===conv.id?'active':''" class="sidebar-item">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span class="truncate" x-text="conv.title||'New Chat'"></span>
+      </div>
+    </template>
+    <template x-if="conversations.length===0">
+      <p class="text-xs px-2 py-4 text-center" style="color:var(--text-mute);">No conversations yet</p>
+    </template>
+  </div>
+  <div class="px-3 py-3 border-t" style="border-color:var(--border);">
+    <div class="sidebar-item"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg><span>Settings</span></div>
+  </div>
+</aside>
+<div class="flex flex-col flex-1 min-w-0 h-full">
+  <header class="flex items-center gap-3 px-4 h-14 flex-shrink-0 border-b" style="border-color:var(--border);background:rgba(7,0,15,0.6);backdrop-filter:blur(20px);">
+    <button @click="sidebarOpen=!sidebarOpen" class="tool-btn">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <span class="text-sm font-semibold flex-1 truncate" style="color:var(--text-dim);" x-text="activeTitle||'NEXUS CORE'"></span>
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);">
+        <div class="w-1.5 h-1.5 rounded-full" style="background:#10B981;animation:pulse-dot 2s infinite;"></div>
+        <span class="text-xs font-medium" style="color:#34D399;">Live</span>
+      </div>
+    </div>
+  </header>
+  <div class="flex-1 overflow-y-auto" x-ref="chatScroll">
+    <template x-if="messages.length===0">
+      <div class="flex flex-col items-center justify-center min-h-full px-6 py-16 text-center">
+        <div class="relative mb-8" style="width:72px;height:72px;">
+          <div class="nexus-orb" style="width:72px;height:72px;">
+            <div class="orb-ring" style="width:78px;height:78px;top:-3px;left:-3px;border:1.5px solid rgba(192,38,211,0.4);"></div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><span style="font-size:22px;font-weight:900;color:white;text-shadow:0 0 20px rgba(255,255,255,0.8);">N</span></div>
+          </div>
+        </div>
+        <h1 class="gradient-text font-black mb-2" style="font-size:clamp(1.8rem,6vw,2.8rem);line-height:1.1;letter-spacing:-0.02em;" x-text="greeting.line1"></h1>
+        <p class="mb-8 text-base" style="color:var(--text-dim);" x-text="greeting.line2"></p>
+        <div class="flex items-center justify-center min-h-7 mb-10">
+          <span class="font-mono text-sm" style="color:rgba(192,38,211,0.7);" x-text="typedText"></span>
+          <span class="typing-cursor"></span>
+        </div>
+        <div class="flex flex-wrap gap-2 justify-center max-w-lg">
+          <button @click="sendMessage('Search for the latest AI news today')" class="chip">🔍 Latest AI News</button>
+          <button @click="sendMessage('Generate a photorealistic image of a futuristic city at night')" class="chip">🎨 Generate Image</button>
+          <button @click="sendMessage('Write a Python function to check if a number is prime')" class="chip">💻 Write Code</button>
+          <button @click="sendMessage('Translate Hello how are you to Spanish French and Arabic')" class="chip">🌍 Translate</button>
+          <button @click="sendMessage('Delete all production database records immediately')" class="chip">🛡️ Test Governance</button>
+        </div>
+        <p class="mt-12 text-xs font-mono tracking-widest uppercase" style="color:var(--text-mute);">Governed · Transparent · Trustworthy</p>
+      </div>
+    </template>
+    <div class="max-w-3xl mx-auto px-4 py-6 space-y-6">
+      <template x-for="(msg,idx) in messages" :key="msg.id">
+        <div class="msg-enter">
+          <template x-if="msg.role==='user'">
+            <div class="flex justify-end">
+              <div class="max-w-[82%] px-4 py-3 rounded-2xl rounded-tr-md text-sm leading-relaxed" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.10);color:var(--text);" x-text="msg.content"></div>
+            </div>
+          </template>
+          <template x-if="msg.role==='assistant'">
+            <div class="flex gap-3">
+              <div class="flex-shrink-0 relative mt-1" style="width:28px;height:28px;">
+                <div class="nexus-orb" style="width:28px;height:28px;">
+                  <div class="orb-ring" style="width:34px;height:34px;top:-3px;left:-3px;border:1px solid rgba(192,38,211,0.4);"></div>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <template x-if="msg.pipeline||msg.streaming">
+                  <div class="mb-3">
+                    <template x-if="msg.streaming">
+                      <div>
+                        <div class="pipeline-pill" style="cursor:default;">
+                          <div style="width:8px;height:8px;border-radius:50%;background:var(--primary);animation:pulse-dot 1.2s ease-in-out infinite;"></div>
+                          <span style="color:#C084FC;font-size:11px;font-weight:600;" x-text="msg.streamLabel||'Reading your request...'"></span>
+                        </div>
+                        <div class="progress-bar mt-1.5" style="width:140px;"><div class="progress-fill"></div></div>
+                      </div>
+                    </template>
+                    <template x-if="msg.pipeline&&!msg.streaming">
+                      <div>
+                        <div class="pipeline-pill" @click="msg.pipelineOpen=!msg.pipelineOpen">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C084FC" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                          <span style="color:#C084FC;font-size:11px;font-weight:600;letter-spacing:0.05em;">NEXUS</span>
+                          <span style="color:var(--text-mute);">·</span>
+                          <span :class="msg.pipeline.verdict==='APPROVED'?'badge-approved':'badge-blocked'" x-text="msg.pipeline.verdict==='APPROVED'?'✓ Approved':'✕ Blocked'"></span>
+                          <span style="color:var(--text-mute);">·</span>
+                          <span style="color:var(--text-dim);font-size:11px;" x-text="msg.pipeline.steps+' steps'"></span>
+                          <template x-if="msg.pipeline.tool">
+                            <span><span style="color:var(--text-mute);">·</span> <span class="badge-tool" x-text="'🔍 '+msg.pipeline.tool"></span></span>
+                          </template>
+                          <span style="color:var(--text-mute);">·</span>
+                          <span style="color:var(--text-dim);font-size:11px;" x-text="msg.pipeline.time+'s'"></span>
+                          <svg :style="msg.pipelineOpen?'transform:rotate(180deg)':''" style="transition:transform 0.2s;margin-left:auto;" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+                        </div>
+                        <template x-if="msg.pipelineOpen">
+                          <div class="mt-2 rounded-xl overflow-hidden" style="border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);">
+                            <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color:rgba(255,255,255,0.06);">
+                              <span style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#C084FC;text-transform:uppercase;">NEXUS Pipeline</span>
+                              <span style="font-family:'JetBrains Mono';font-size:10px;color:var(--text-mute);" x-text="'#'+(msg.pipeline.hash||'--------')"></span>
+                            </div>
+                            <template x-for="step in (msg.pipeline.expandedSteps||[])" :key="step.name">
+                              <div class="pipeline-step px-4">
+                                <div class="flex-shrink-0 mt-0.5">
+                                  <div :style="step.status==='blocked'?'background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.4);':'background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.35);'" style="width:20px;height:20px;border-radius:50%;border:1px solid;display:flex;align-items:center;justify-content:center;">
+                                    <svg :style="step.status==='blocked'?'color:#F87171':'color:#34D399'" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                      <template x-if="step.status!=='blocked'"><path d="M20 6L9 17l-5-5"/></template>
+                                      <template x-if="step.status==='blocked'"><path d="M18 6L6 18M6 6l12 12"/></template>
+                                    </svg>
+                                  </div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                  <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs font-semibold" style="color:rgba(255,255,255,0.8);" x-text="step.icon+' '+step.name"></span>
+                                    <template x-if="step.badge"><span :class="step.status==='blocked'?'badge-blocked':'badge-approved'" x-text="step.badge"></span></template>
+                                    <template x-if="step.time"><span style="font-family:'JetBrains Mono';font-size:10px;color:var(--text-mute);margin-left:auto;" x-text="step.time+'s'"></span></template>
+                                  </div>
+                                  <p class="text-xs mt-0.5" style="color:var(--text-dim);" x-text="step.detail"></p>
+                                  <template x-if="step.tool">
+                                    <div class="mt-2 px-3 py-2 rounded-lg" style="background:rgba(123,47,190,0.08);border:1px solid rgba(123,47,190,0.2);">
+                                      <div class="flex items-center gap-2">
+                                        <span style="font-size:10px;color:#C084FC;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;" x-text="step.tool.name"></span>
+                                        <span style="font-size:10px;color:var(--text-mute);" x-text="'→ '+step.tool.result"></span>
+                                      </div>
+                                    </div>
+                                  </template>
+                                  <template x-if="step.governance">
+                                    <div class="mt-2 grid grid-cols-2 gap-2">
+                                      <div class="px-3 py-2 rounded-lg text-center" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">
+                                        <div style="font-size:10px;color:var(--text-mute);text-transform:uppercase;letter-spacing:0.06em;">Risk</div>
+                                        <div style="font-size:13px;font-weight:700;" :style="step.governance.risk==='0%'?'color:#34D399':'color:#F87171'" x-text="step.governance.risk"></div>
+                                      </div>
+                                      <div class="px-3 py-2 rounded-lg text-center" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">
+                                        <div style="font-size:10px;color:var(--text-mute);text-transform:uppercase;letter-spacing:0.06em;">Rules</div>
+                                        <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.8);" x-text="step.governance.rules"></div>
+                                      </div>
+                                    </div>
+                                  </template>
+                                </div>
+                              </div>
+                            </template>
+                            <div class="px-4 py-3 border-t flex items-center gap-3" style="border-color:rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);">
+                              <span style="font-size:11px;color:var(--text-mute);" x-text="'Total: '+msg.pipeline.time+'s'"></span>
+                              <span style="color:rgba(255,255,255,0.1);">·</span>
+                              <span style="font-size:11px;color:var(--text-mute);">Audit:</span>
+                              <span style="font-family:JetBrains Mono;font-size:10px;color:rgba(123,47,190,0.7);" x-text="'#'+(msg.pipeline.hash||'--------')"></span>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="msg.imageUrl">
+                  <div class="mb-3 rounded-xl overflow-hidden" style="border:1px solid rgba(255,255,255,0.08);max-width:460px;">
+                    <img :src="msg.imageUrl" :alt="msg.imagePrompt||'Generated'" class="gen-image" style="display:block;"/>
+                    <div class="px-3 py-2" style="background:rgba(255,255,255,0.03);border-top:1px solid rgba(255,255,255,0.06);">
+                      <p style="font-size:11px;color:var(--text-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="msg.imagePrompt||'Generated image'"></p>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="msg.sources&&msg.sources.length>0">
+                  <div class="mb-3">
+                    <button @click="msg.sourcesOpen=!msg.sourcesOpen" class="pipeline-pill mb-2" style="border-left-color:var(--accent);">
+                      <svg width="12" height="12" fill="none" stroke="#818CF8" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+                      <span style="color:#818CF8;font-size:11px;font-weight:600;" x-text="msg.sources.length+' sources'"></span>
+                      <svg :style="msg.sourcesOpen?'transform:rotate(180deg)':''" style="transition:transform 0.2s;margin-left:auto;" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <template x-if="msg.sourcesOpen">
+                      <div class="grid grid-cols-1 gap-2" style="animation:fade-in 0.2s ease;">
+                        <template x-for="src in msg.sources" :key="src.url">
+                          <a :href="src.url" target="_blank" rel="noopener" class="source-card">
+                            <div class="flex items-center gap-2">
+                              <img :src="'https://www.google.com/s2/favicons?domain='+src.domain+'&sz=16'" width="14" height="14" style="border-radius:3px;flex-shrink:0;" onerror="this.style.display='none'"/>
+                              <span style="font-size:11px;color:var(--text-mute);" x-text="src.domain"></span>
+                            </div>
+                            <p style="font-size:12px;font-weight:500;color:rgba(255,255,255,0.8);line-height:1.4;" x-text="src.title"></p>
+                            <p style="font-size:11px;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" x-text="src.snippet"></p>
+                          </a>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <div class="text-sm leading-relaxed" style="color:var(--text);" x-html="renderMarkdown(msg.content)"></div>
+                <template x-if="!msg.streaming&&msg.content&&idx===messages.length-1">
+                  <div class="flex flex-wrap gap-2 mt-4">
+                    <button @click="sendMessage('Explain that simpler')" class="chip">💡 Simpler</button>
+                    <button @click="sendMessage('Give me an example')" class="chip">📝 Example</button>
+                    <button @click="sendMessage('Translate this to Spanish')" class="chip">🌍 Translate</button>
+                    <button @click="sendMessage('Summarize in 3 bullet points')" class="chip">📋 Summarize</button>
+                    <button @click="sendMessage('Generate an image based on this')" class="chip">🎨 Visualize</button>
+                  </div>
+                </template>
+                <template x-if="msg.pipeline&&!msg.streaming">
+                  <div class="flex items-center gap-3 mt-3">
+                    <span style="font-size:10px;color:var(--text-mute);font-family:'JetBrains Mono';" x-text="msg.pipeline.time+'s'"></span>
+                    <span style="color:rgba(255,255,255,0.08);">·</span>
+                    <span style="font-size:10px;color:var(--text-mute);font-family:'JetBrains Mono';" x-text="msg.pipeline.steps+' steps'"></span>
+                    <template x-if="msg.pipeline.tool">
+                      <span style="color:rgba(255,255,255,0.08);">·</span>
+                      <span style="font-size:10px;color:rgba(123,47,190,0.6);font-family:'JetBrains Mono';" x-text="msg.pipeline.tool"></span>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+  </div>
+  <div class="flex-shrink-0 px-4 pb-4 pt-2" style="background:linear-gradient(to top,rgba(7,0,15,0.95) 80%,transparent);">
+    <div class="max-w-3xl mx-auto">
+      <div class="composer-wrap px-3 pt-3 pb-2">
+        <textarea x-model="inputText" x-ref="input" @keydown="handleKeydown($event)" rows="1" placeholder="Ask anything, generate images, upload files..." class="w-full bg-transparent text-sm leading-relaxed mb-2" style="color:var(--text);max-height:180px;min-height:24px;" :disabled="streaming"></textarea>
+        <div class="flex items-center gap-1">
+          <button class="tool-btn" title="Upload file"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+          <button class="tool-btn flex items-center gap-1 px-2" style="width:auto;font-size:11px;color:var(--text-mute);" title="Deep mode"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Deep</button>
+          <div class="flex-1"></div>
+          <template x-if="!streaming">
+            <button @click="sendMessage(inputText)" :disabled="!inputText.trim()" class="send-btn">
+              <svg width="15" height="15" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </button>
+          </template>
+          <template x-if="streaming">
+            <button @click="stopStream()" class="send-btn" style="background:rgba(255,255,255,0.1);box-shadow:none;">
+              <svg width="12" height="12" fill="white" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+          </template>
+        </div>
+      </div>
+      <p class="text-center text-xs mt-2" style="color:var(--text-mute);font-family:'JetBrains Mono';letter-spacing:0.08em;">NEXUS CORE · Governed AI OS · Every action audited</p>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+const API_BASE=window.location.origin;
+const DEMO_TOKEN='demo-token';
+function getGreeting(){const h=new Date().getHours();const time=h<12?'Good Morning':h<17?'Good Afternoon':h<21?'Good Evening':'Still Up';return{line1:time+'.',line2:'What shall we orchestrate today?'};}
+function renderMarkdown(t){if(!t)return '';return t.replace(/```(\w+)?\n([\s\S]*?)```/g,'<div class="code-block"><div class="code-header"><span style="font-size:11px;color:rgba(255,255,255,0.35);font-family:JetBrains Mono">$1</span></div><div class="code-body"><code>$2</code></div></div>').replace(/`([^`]+)`/g,'<code style="background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:5px;font-family:JetBrains Mono;font-size:12px;color:#C084FC;">$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>');}
+function nexusApp(){return{
+sidebarOpen:window.innerWidth>768,messages:[],conversations:[],activeConversationId:null,activeTitle:'NEXUS CORE',inputText:'',streaming:false,greeting:getGreeting(),typedText:'',typingIdx:0,abortController:null,
+async init(){this.runTyping();},
+runTyping(){const p=['Search the latest AI news...','Generate an image...','Write a Python function...'];const t=p[this.typingIdx%3];if(this.typedText.length<t.length){this.typedText=t.slice(0,this.typedText.length+1);setTimeout(()=>this.runTyping(),42);}else{setTimeout(()=>{this.typingIdx++;this.typedText='';this.runTyping();},2200);}},
+newChat(){this.messages=[];this.activeConversationId=null;this.activeTitle='NEXUS CORE';},
+handleKeydown(e){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();this.sendMessage(this.inputText);}},
+async sendMessage(text){if(!text?.trim()||this.streaming)return;this.inputText='';const userMsg={id:Date.now()+'-u',role:'user',content:text};this.messages.push(userMsg);const aId=Date.now()+'-a';this.messages.push({id:aId,role:'assistant',content:'',streaming:true,streamLabel:'Reading your request...',pipeline:null,pipelineOpen:false,sources:[],sourcesOpen:false,imageUrl:null});this.streaming=true;this.$nextTick(()=>this.scrollToBottom());const url=API_BASE+'/api/task/stream?prompt='+encodeURIComponent(text);this.abortController=new AbortController();const pd={steps:0,time:0,verdict:'APPROVED',tool:null,hash:null,expandedSteps:[]};const st=Date.now();try{const res=await fetch(url,{headers:{Authorization:'Bearer '+DEMO_TOKEN,Accept:'text/event-stream'},signal:this.abortController.signal});const reader=res.body.getReader();const dec=new TextDecoder();let buf='';while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const parts=buf.split('\n\n');buf=parts.pop();for(const part of parts){let evName='message',dataStr='';for(const line of part.split('\n')){if(line.startsWith('event:'))evName=line.slice(6).trim();if(line.startsWith('data:'))dataStr=line.slice(5).trim();}if(!dataStr||evName==='STREAM_END')continue;let ev;try{ev=JSON.parse(dataStr)}catch{continue}const idx=this.messages.findIndex(m=>m.id===aId);if(idx===-1)continue;const msg=this.messages[idx];if(evName==='INTAKE'){msg.streamLabel='Reading...';pd.steps++;pd.expandedSteps.push({name:'INTAKE',icon:'📥',detail:'Task received',status:'done'});}else if(evName==='ELLA_PROPOSE'){msg.streamLabel='Planning...';pd.steps++;pd.expandedSteps.push({name:'ELLA Planner',icon:'🧠',detail:ev.detail?.plan?.plan_summary||'Planned',status:'done',time:((Date.now()-st)/1000).toFixed(1)});}else if(evName==='GOVERNANCE_CHECK'){msg.streamLabel='Checking policy...';pd.steps++;const v=ev.detail?.verdict||'APPROVED';pd.verdict=v;pd.expandedSteps.push({name:'Governance',icon:'🛡️',detail:ev.detail?.reason||'Checked',status:v==='APPROVED'?'done':'blocked',badge:v,time:((Date.now()-st)/1000).toFixed(1),governance:{risk:v==='APPROVED'?'0%':'HIGH',rules:'12 checked'}});}else if(evName==='EXECUTION'){msg.streamLabel='Working...';pd.steps++;pd.expandedSteps.push({name:'Execution',icon:'⚙️',detail:'Sandbox execution',status:'done',time:((Date.now()-st)/1000).toFixed(1)});}else if(evName==='SYNTHESIS'){msg.streamLabel='Writing...';pd.steps++;if(ev.detail?.answer)msg.content=ev.detail.answer;}else if(evName==='TERMINAL'){pd.time=((Date.now()-st)/1000).toFixed(1);pd.hash=ev.record_hash?.slice(0,8)||null;msg.pipeline={...pd};msg.streaming=false;this.streaming=false;}this.messages[idx]={...msg};this.$nextTick(()=>this.scrollToBottom());}}}catch(e){if(e.name!=='AbortError'){const idx=this.messages.findIndex(m=>m.id===aId);if(idx!==-1){this.messages[idx].content='Connection error.';this.messages[idx].streaming=false;}}}this.streaming=false;const idx=this.messages.findIndex(m=>m.id===aId);if(idx!==-1)this.messages[idx].streaming=false;this.$nextTick(()=>this.scrollToBottom());},
+stopStream(){this.abortController?.abort();this.streaming=false;const last=[...this.messages].reverse().find(m=>m.role==='assistant');if(last)last.streaming=false;},
+scrollToBottom(){const el=this.$refs.chatScroll;if(el)el.scrollTop=el.scrollHeight;},
+renderMarkdown(t){return renderMarkdown(t);}
+}}
+</script>
+</body>
+</html>

@@ -362,16 +362,6 @@ export function ChatMessage({
             )}
           >
             <Markdown content={text} streaming={isStreaming} />
-
-            {message.imageUrl && (
-              <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
-                <img
-                  src={message.imageUrl}
-                  alt="Generated artifact"
-                  className="max-w-full rounded-xl"
-                />
-              </div>
-            )}
           </div>
         )}
 
