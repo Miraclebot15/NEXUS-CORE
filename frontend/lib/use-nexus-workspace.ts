@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api-client'
 import type { GetToken } from './api-client'
-import { applyStreamEvent, createTimeline, type Timeline } from './orchestration'
+import { applyStreamEvent, createTimeline, parseArtifactContent, type Timeline } from './orchestration'
 
 const LAST_PROJECT_KEY = 'nexus:last-project-id'
 const LAST_CONVERSATION_KEY = 'nexus:last-conversation-id'
@@ -32,6 +32,8 @@ export interface NexusMessage {
   role: 'user' | 'assistant'
   parts: { type: 'text'; text: string }[]
   taskId?: string | null
+  artifacts?: any[]
+  imageUrl?: string
 }
 
 export type WorkspaceStatus = 'idle' | 'loading' | 'streaming' | 'error'
@@ -320,13 +322,73 @@ export function useNexusWorkspace(getToken?: GetToken) {
           )
         }
 
-        // Stream finished: refetch the authoritative conversation history so
-        // the final assistant message matches exactly what the backend
-        // persisted (rather than trusting a client-reconstructed string).
-        const msgs = await api.listMessages(conversationId, getToken)
-        setMessages(msgs.map(messageFromApi))
-        if (activeProjectId) await refreshConversations(activeProjectId)
-        setStatus('idle')
+          // Stream finished: refetch the authoritative conversation history so
+          // the final assistant message matches exactly what the backend
+          // persisted (rather than trusting a client-reconstructed string).
+          const msgs = await api.listMessages(conversationId, getToken)
+          const mappedMsgs = msgs.map(messageFromApi)
+
+          const realAssistant = [...mappedMsgs]
+            .reverse()
+            .find((m) => m.role === 'assistant')
+
+          if (realAssistant && timeline.taskId) {
+            const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
+            const imageArtifact = artifacts.find((a) => a.artifact_type === 'image')
+
+            if (imageArtifact) {
+              const content = parseArtifactContent(imageArtifact.content)
+              realAssistant.imageUrl = String(content.url)
+            }
+          }
+
+          if (realAssistant) {
+            setTimelines((prev) => ({
+              ...prev,
+              [realAssistant.id]: prev[assistantMsgId] ?? timeline,
+            }))
+          }
+
+          setMessages(mappedMsgs)
+
+
+          if (timeline.taskId) {
+            const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
+
+            setTimelines((prev) => {
+              const targetId = realAssistant?.id ?? assistantMsgId
+
+              return {
+                ...prev,
+                [targetId]: {
+                  ...(prev[targetId] ?? timeline),
+                  artifacts: artifacts.map((a) => ({
+                    id: a.id,
+                    artifactType: a.artifact_type,
+                    title: a.title,
+                    content: parseArtifactContent(a.content),
+                  })),
+                },
+              }
+            })
+
+            const imageArtifact = artifacts.find((a) => a.artifact_type === 'image')
+
+            if (imageArtifact) {
+              const content = parseArtifactContent(imageArtifact.content)
+
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === realAssistant?.id
+                    ? { ...m, imageUrl: String(content.url) }
+                    : m
+                )
+              )
+            }
+          }
+
+          if (activeProjectId) await refreshConversations(activeProjectId)
+          setStatus('idle')
       } catch (err) {
         if (controller.signal.aborted) {
           setStatus('idle')
