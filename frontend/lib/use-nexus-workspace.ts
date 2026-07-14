@@ -53,23 +53,29 @@ function textMessage(
 
 function messageFromApi(m: api.MessageOut): NexusMessage {
   const msg = textMessage(m.id, m.role, m.content, m.task_id)
-  // Check if this assistant message has associated artifacts that include an image
+  // Handle any artifacts associated with this message
   if (m.task_id && m.role === 'assistant') {
     const timeline = timelines[m.id]
-    if (timeline?.artifacts) {
+    if (timeline?.artifacts?.length) {
       const imageArtifact = timeline.artifacts.find(a => 
         a.artifactType === 'image' && 
         a.content && 
         typeof a.content === 'object' && 
         'url' in a.content
       )
+      
       if (imageArtifact) {
         const url = String(imageArtifact.content.url)
         if (url.startsWith('http://') || url.startsWith('https://')) {
           msg.imageUrl = url
-          msg.artifacts = timeline.artifacts
         }
       }
+      
+      // Always attach artifacts array if present
+      msg.artifacts = timeline.artifacts.map(a => ({
+        ...a,
+        content: parseArtifactContent(a.content)
+      }))
     }
   }
   return msg
@@ -184,20 +190,37 @@ export function useNexusWorkspace(getToken?: GetToken) {
           const msgs = await api.listMessages(convo.id, getToken)
           if (cancelled) return
           
-          // Load artifacts for initial messages
+          // Load artifacts for all assistant messages with tasks
           const assistantMessages = msgs.filter(m => m.role === 'assistant' && m.task_id)
-          const artifactPromises = assistantMessages.map(async m => ({
-            messageId: m.id,
-            artifacts: await api.listTaskArtifacts(m.task_id!, getToken)
-          }))
+          const artifactPromises = assistantMessages.map(async m => {
+            try {
+              const artifacts = await api.listTaskArtifacts(m.task_id!, getToken)
+              return {
+                messageId: m.id,
+                artifacts,
+                success: true
+              }
+            } catch (err) {
+              console.error(`Failed to load artifacts for message ${m.id}:`, err)
+              return {
+                messageId: m.id,
+                artifacts: [],
+                success: false
+              }
+            }
+          })
           
-          const loadedArtifacts = await Promise.all(artifactPromises)
-          const newTimelines = loadedArtifacts.reduce((acc, {messageId, artifacts}) => {
+          const artifactResults = await Promise.all(artifactPromises)
+          const newTimelines = artifactResults.reduce((acc, {messageId, artifacts}) => {
+            const validArtifacts = artifacts.filter(a => 
+              a.artifact_type && a.content
+            )
+            
             return {
               ...acc,
               [messageId]: {
                 ...createTimeline(''),
-                artifacts: artifacts.map(a => ({
+                artifacts: validArtifacts.map(a => ({
                   id: a.id,
                   artifactType: a.artifact_type,
                   title: a.title,
@@ -456,12 +479,27 @@ export function useNexusWorkspace(getToken?: GetToken) {
               try {
                 const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
                 const imageArtifact = artifacts.find((a) => a.artifact_type === 'image')
+                const codeArtifact = artifacts.find((a) => a.artifact_type === 'code')
 
                 if (imageArtifact) {
                   const content = parseArtifactContent(imageArtifact.content)
                   if (content && typeof content.url === 'string') {
                     realAssistant.imageUrl = content.url
+                    realAssistant.artifacts = artifacts.map(a => ({
+                      id: a.id,
+                      artifactType: a.artifact_type,
+                      title: a.title,
+                      content: parseArtifactContent(a.content),
+                    }))
                   }
+                }
+                if (codeArtifact) {
+                  realAssistant.artifacts = artifacts.map(a => ({
+                    id: a.id,
+                    artifactType: a.artifact_type,
+                    title: a.title,
+                    content: parseArtifactContent(a.content),
+                  }))
                 }
               } catch (artifactErr) {
                 console.error('Failed to load artifacts:', artifactErr)
