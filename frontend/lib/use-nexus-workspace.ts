@@ -57,6 +57,7 @@ function messageFromApi(m: api.MessageOut): NexusMessage {
   if (m.task_id && m.role === 'assistant') {
     const timeline = timelines[m.id]
     if (timeline?.artifacts?.length) {
+      // Find and set image URL if available
       const imageArtifact = timeline.artifacts.find(a => 
         a.artifactType === 'image' && 
         a.content && 
@@ -71,11 +72,20 @@ function messageFromApi(m: api.MessageOut): NexusMessage {
         }
       }
       
-      // Always attach artifacts array if present
-      msg.artifacts = timeline.artifacts.map(a => ({
-        ...a,
-        content: parseArtifactContent(a.content)
-      }))
+      // Attach all artifacts with parsed content
+      msg.artifacts = timeline.artifacts.map(a => {
+        const content = parseArtifactContent(a.content)
+        return {
+          id: a.id,
+          artifactType: a.artifactType,
+          title: a.title,
+          content,
+          // Special handling for image URLs to ensure they're accessible
+          ...(a.artifactType === 'image' && content && typeof content === 'object' && 'url' in content 
+            ? { imageUrl: String(content.url) } 
+            : {})
+        }
+      })
     }
   }
   return msg
