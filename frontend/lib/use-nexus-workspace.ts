@@ -480,42 +480,32 @@ export function useNexusWorkspace(getToken?: GetToken) {
             })
 
             const mappedMsgs = msgs.map(messageFromApi)
-
-            const realAssistant = [...mappedMsgs]
-              .reverse()
-              .find((m) => m.role === 'assistant')
-
-            if (realAssistant && timeline.taskId) {
-              try {
-                const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
-                const imageArtifact = artifacts.find((a) => a.artifact_type === 'image')
-                const codeArtifact = artifacts.find((a) => a.artifact_type === 'code')
-
-                if (imageArtifact) {
-                  const content = parseArtifactContent(imageArtifact.content)
-                  if (content && typeof content.url === 'string') {
-                    realAssistant.imageUrl = content.url
-                    realAssistant.artifacts = artifacts.map(a => ({
-                      id: a.id,
-                      artifactType: a.artifact_type,
-                      title: a.title,
-                      content: parseArtifactContent(a.content),
-                    }))
-                  }
-                }
-                if (codeArtifact) {
-                  realAssistant.artifacts = artifacts.map(a => ({
+            
+            // Load artifacts for all assistant messages with tasks
+            const assistantMessages = msgs.filter(m => m.role === 'assistant' && m.task_id)
+            const artifactPromises = assistantMessages.map(async m => ({
+              messageId: m.id,
+              artifacts: await api.listTaskArtifacts(m.task_id!, getToken)
+            }))
+            
+            const loadedArtifacts = await Promise.all(artifactPromises)
+            const newTimelines = loadedArtifacts.reduce((acc, {messageId, artifacts}) => {
+              return {
+                ...acc,
+                [messageId]: {
+                  ...(acc[messageId] || createTimeline('')),
+                  artifacts: artifacts.map(a => ({
                     id: a.id,
                     artifactType: a.artifact_type,
                     title: a.title,
                     content: parseArtifactContent(a.content),
-                  }))
+                  })),
+                  finalStatus: 'EXECUTED',
                 }
-              } catch (artifactErr) {
-                console.error('Failed to load artifacts:', artifactErr)
               }
-            }
+            }, {...timelines})
 
+            setTimelines(newTimelines)
             setMessages(mappedMsgs)
           } catch (refreshErr) {
             console.error('Failed to refresh messages after stream:', refreshErr)
