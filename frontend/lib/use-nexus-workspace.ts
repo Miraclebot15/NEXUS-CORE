@@ -57,9 +57,18 @@ function messageFromApi(m: api.MessageOut): NexusMessage {
   if (m.task_id && m.role === 'assistant') {
     const timeline = timelines[m.id]
     if (timeline?.artifacts) {
-      const imageArtifact = timeline.artifacts.find(a => a.artifactType === 'image')
-      if (imageArtifact?.content && typeof imageArtifact.content === 'object' && 'url' in imageArtifact.content) {
-        msg.imageUrl = String(imageArtifact.content.url)
+      const imageArtifact = timeline.artifacts.find(a => 
+        a.artifactType === 'image' && 
+        a.content && 
+        typeof a.content === 'object' && 
+        'url' in a.content
+      )
+      if (imageArtifact) {
+        const url = String(imageArtifact.content.url)
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          msg.imageUrl = url
+          msg.artifacts = timeline.artifacts
+        }
       }
     }
   }
@@ -174,10 +183,37 @@ export function useNexusWorkspace(getToken?: GetToken) {
           setActiveConversation(convo.id)
           const msgs = await api.listMessages(convo.id, getToken)
           if (cancelled) return
+          
+          // Load artifacts for initial messages
+          const assistantMessages = msgs.filter(m => m.role === 'assistant' && m.task_id)
+          const artifactPromises = assistantMessages.map(async m => ({
+            messageId: m.id,
+            artifacts: await api.listTaskArtifacts(m.task_id!, getToken)
+          }))
+          
+          const loadedArtifacts = await Promise.all(artifactPromises)
+          const newTimelines = loadedArtifacts.reduce((acc, {messageId, artifacts}) => {
+            return {
+              ...acc,
+              [messageId]: {
+                ...createTimeline(''),
+                artifacts: artifacts.map(a => ({
+                  id: a.id,
+                  artifactType: a.artifact_type,
+                  title: a.title,
+                  content: parseArtifactContent(a.content),
+                })),
+                finalStatus: 'EXECUTED',
+              }
+            }
+          }, {})
+          
+          setTimelines(newTimelines)
           setMessages(msgs.map(messageFromApi))
         } else {
           setActiveConversation(null)
           setMessages([])
+          setTimelines({})
         }
         setStatus('idle')
       } catch (err) {
@@ -209,10 +245,36 @@ export function useNexusWorkspace(getToken?: GetToken) {
       setActiveConversation(conversationId)
       try {
         const msgs = await api.listMessages(conversationId, getToken)
+        
+        // Load artifacts for all assistant messages with task_ids
+        const assistantMessages = msgs.filter(m => m.role === 'assistant' && m.task_id)
+        const artifactPromises = assistantMessages.map(async m => ({
+          messageId: m.id,
+          artifacts: await api.listTaskArtifacts(m.task_id!, getToken)
+        }))
+        
+        const loadedArtifacts = await Promise.all(artifactPromises)
+        const newTimelines = loadedArtifacts.reduce((acc, {messageId, artifacts}) => {
+          return {
+            ...acc,
+            [messageId]: {
+              ...createTimeline(''),
+              artifacts: artifacts.map(a => ({
+                id: a.id,
+                artifactType: a.artifact_type,
+                title: a.title,
+                content: parseArtifactContent(a.content),
+              })),
+              finalStatus: 'EXECUTED',
+            }
+          }
+        }, {})
+
+        setTimelines(newTimelines)
         setMessages(msgs.map(messageFromApi))
-        setTimelines({})
         setStatus('idle')
       } catch (err) {
+        console.error('Failed to load conversation:', err)
         setError(err instanceof Error ? err.message : 'Failed to load conversation.')
         setStatus('error')
       }
