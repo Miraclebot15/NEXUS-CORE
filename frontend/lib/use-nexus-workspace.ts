@@ -11,7 +11,8 @@ const LAST_CONVERSATION_KEY = 'nexus:last-conversation-id'
 function readStored(key: string): string | null {
   if (typeof window === 'undefined') return null
   try {
-    return window.localStorage.getItem(key)
+    const value = window.localStorage.getItem(key)
+    return typeof value === 'string' ? value : null
   } catch {
     return null
   }
@@ -20,10 +21,13 @@ function readStored(key: string): string | null {
 function writeStored(key: string, value: string | null) {
   if (typeof window === 'undefined') return
   try {
-    if (value) window.localStorage.setItem(key, value)
-    else window.localStorage.removeItem(key)
+    if (value && typeof value === 'string') {
+      window.localStorage.setItem(key, value)
+    } else {
+      window.localStorage.removeItem(key) 
+    }
   } catch {
-    /* localStorage unavailable (private browsing, etc.) -- non-fatal */
+    console.warn('Failed to access localStorage')
   }
 }
 
@@ -89,6 +93,13 @@ export function useNexusWorkspace(getToken?: GetToken) {
 
   const abortRef = useRef<AbortController | null>(null)
   const streamingAssistantIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      // Clean up any pending streams on unmount
+      abortRef.current?.abort()
+    }
+  }, [])
   // Kept in a ref (not state) so `send`, called immediately after `newChat`,
   // always sees the latest value without waiting on a state-update render.
   const activeConversationRef = useRef<string | null>(null)
@@ -322,24 +333,38 @@ export function useNexusWorkspace(getToken?: GetToken) {
           )
         }
 
-          // Stream finished: refetch the authoritative conversation history so
-          // the final assistant message matches exactly what the backend
-          // persisted (rather than trusting a client-reconstructed string).
-          const msgs = await api.listMessages(conversationId, getToken)
-          const mappedMsgs = msgs.map(messageFromApi)
+          try {
+            // Stream finished: refetch the authoritative conversation history so
+            // the final assistant message matches exactly what the backend
+            // persisted (rather than trusting a client-reconstructed string).
+            const msgs = await api.listMessages(conversationId, getToken)
+            const mappedMsgs = msgs.map(messageFromApi)
 
-          const realAssistant = [...mappedMsgs]
-            .reverse()
-            .find((m) => m.role === 'assistant')
+            const realAssistant = [...mappedMsgs]
+              .reverse()
+              .find((m) => m.role === 'assistant')
 
-          if (realAssistant && timeline.taskId) {
-            const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
-            const imageArtifact = artifacts.find((a) => a.artifact_type === 'image')
+            if (realAssistant && timeline.taskId) {
+              try {
+                const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
+                const imageArtifact = artifacts.find((a) => a.artifact_type === 'image')
 
-            if (imageArtifact) {
-              const content = parseArtifactContent(imageArtifact.content)
-              realAssistant.imageUrl = String(content.url)
+                if (imageArtifact) {
+                  const content = parseArtifactContent(imageArtifact.content)
+                  if (content && typeof content.url === 'string') {
+                    realAssistant.imageUrl = content.url
+                  }
+                }
+              } catch (artifactErr) {
+                console.error('Failed to load artifacts:', artifactErr)
+              }
             }
+
+            setMessages(mappedMsgs)
+          } catch (refreshErr) {
+            console.error('Failed to refresh messages after stream:', refreshErr)
+            // Fall back to keeping the local messages if refresh fails
+            setMessages(prev => [...prev])
           }
 
           if (realAssistant) {
