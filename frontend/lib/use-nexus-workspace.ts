@@ -52,7 +52,18 @@ function textMessage(
 }
 
 function messageFromApi(m: api.MessageOut): NexusMessage {
-  return textMessage(m.id, m.role, m.content, m.task_id)
+  const msg = textMessage(m.id, m.role, m.content, m.task_id)
+  // Check if this assistant message has associated artifacts that include an image
+  if (m.task_id && m.role === 'assistant') {
+    const timeline = timelines[m.id]
+    if (timeline?.artifacts) {
+      const imageArtifact = timeline.artifacts.find(a => a.artifactType === 'image')
+      if (imageArtifact?.content && typeof imageArtifact.content === 'object' && 'url' in imageArtifact.content) {
+        msg.imageUrl = String(imageArtifact.content.url)
+      }
+    }
+  }
+  return msg
 }
 
 /** Chooses a short, honest line to show while a task streams, before the
@@ -338,6 +349,41 @@ export function useNexusWorkspace(getToken?: GetToken) {
             // the final assistant message matches exactly what the backend
             // persisted (rather than trusting a client-reconstructed string).
             const msgs = await api.listMessages(conversationId, getToken)
+            const timelinesWithArtifacts = await Promise.all(
+              msgs
+                .filter(m => m.role === 'assistant' && m.task_id)
+                .map(async m => {
+                  try {
+                    const artifacts = await api.listTaskArtifacts(m.task_id!, getToken)
+                    return {
+                      messageId: m.id,
+                      artifacts: artifacts.map(a => ({
+                        id: a.id,
+                        artifactType: a.artifact_type,
+                        title: a.title,
+                        content: parseArtifactContent(a.content),
+                      }))
+                    }
+                  } catch {
+                    return { messageId: m.id, artifacts: [] }
+                  }
+                })
+            )
+
+            // Update timelines with persisted artifacts
+            setTimelines(prev => {
+              const next = { ...prev }
+              for (const { messageId, artifacts } of timelinesWithArtifacts) {
+                if (artifacts.length) {
+                  next[messageId] = {
+                    ...(next[messageId] || createTimeline('')),
+                    artifacts,
+                  }
+                }
+              }
+              return next
+            })
+
             const mappedMsgs = msgs.map(messageFromApi)
 
             const realAssistant = [...mappedMsgs]
