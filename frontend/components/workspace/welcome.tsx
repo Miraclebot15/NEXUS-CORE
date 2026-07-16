@@ -2,32 +2,24 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { getAdaptiveGreeting } from '@/lib/context/greeting-engine'
+import { generateAdaptivePrompts } from '@/lib/context/adaptive-prompt-engine'
+import { collectWorkspaceContext } from '@/lib/context/context-collector'
 
-const PROMPTS = [
-  'Search the latest AI news...',
-  'Generate an image of a futuristic city...',
-  'Write a Python script that sorts data...',
-  'What happened in the world today?',
-  'Translate this to French...',
-  'Explain quantum computing simply...',
-  'Debug this code for me...',
-  'Create a business plan for my startup...',
-  'How do I learn machine learning fast?',
-  'Generate a realistic portrait...',
+const DEFAULT_PROMPTS = [
+  "What are we building today?"
 ]
 
 function getGreeting(name?: string): { line1: string; line2: string } {
-  const h = new Date().getHours()
-  const day = new Date().getDay()
+  const greeting = getAdaptiveGreeting({
+    userName: name,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  })
 
-  let time = h >= 5 && h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : h < 21 ? 'Good Evening' : 'Late Night'
-  let line2 = 'What shall we orchestrate today?'
-
-  if (day === 0 || day === 6) line2 = 'Weekend mode. What are we building?'
-  else if (day === 1) line2 = 'New week. New possibilities.'
-  else if (day === 5) line2 = "Friday. Let's finish strong."
-
-  return { line1: name ? `${time}, ${name}.` : time + '.', line2 }
+  return {
+    line1: greeting.headline,
+    line2: greeting.subtitle,
+  }
 }
 
 function NexusOrb() {
@@ -58,20 +50,56 @@ function NexusOrb() {
   )
 }
 
-export function Welcome({ onSend }: { onSend?: (text: string) => void }) {
+export function Welcome({
+  onSend,
+  projects = [],
+  messages = [],
+  status = 'idle',
+}: {
+  onSend?: (text: string) => void
+  projects?: any[]
+  messages?: any[]
+  status?: string
+}) {
+  const [prompts, setPrompts] = useState<string[]>(DEFAULT_PROMPTS)
   const [promptIdx, setPromptIdx] = useState(0)
   const [displayed, setDisplayed] = useState('')
   const [typing, setTyping] = useState(true)
   const { line1, line2 } = getGreeting()
 
   useEffect(() => {
-    const target = PROMPTS[promptIdx]
+
+    const workspaceContext = collectWorkspaceContext({
+      projects,
+      messages,
+      status,
+    })
+
+    const adaptive = generateAdaptivePrompts({
+      ...workspaceContext,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      currentHour: new Date().getHours(),
+    })
+
+    const generated = adaptive.map(
+      item => item.text
+    )
+
+    if (generated.length) {
+      setPrompts(generated)
+    }
+
+  }, [projects, messages, status])
+
+
+  useEffect(() => {
+    const target = prompts[promptIdx] ?? DEFAULT_PROMPTS[0]
     let i = 0
     setDisplayed('')
     setTyping(true)
     const interval = setInterval(() => {
       if (i < target.length) { setDisplayed(target.slice(0, i + 1)); i++ }
-      else { clearInterval(interval); setTyping(false); setTimeout(() => setPromptIdx(p => (p + 1) % PROMPTS.length), 2000) }
+      else { clearInterval(interval); setTyping(false); setTimeout(() => setPromptIdx(p => (p + 1) % (prompts.length || 1)), 2000) }
     }, 42)
     return () => clearInterval(interval)
   }, [promptIdx])

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api-client'
 import type { GetToken } from './api-client'
-import { applyStreamEvent, createTimeline, parseArtifactContent, type Timeline } from './orchestration'
+import { applyStreamEvent, createTimeline, parseArtifactContent, type Timeline, type FinalStatus } from './orchestration'
 
 const LAST_PROJECT_KEY = 'nexus:last-project-id'
 const LAST_CONVERSATION_KEY = 'nexus:last-conversation-id'
@@ -52,43 +52,7 @@ function textMessage(
 }
 
 function messageFromApi(m: api.MessageOut): NexusMessage {
-  const msg = textMessage(m.id, m.role, m.content, m.task_id)
-  // Handle any artifacts associated with this message
-  if (m.task_id && m.role === 'assistant') {
-    const timeline = timelines[m.id]
-    if (timeline?.artifacts?.length) {
-      // Find and set image URL if available
-      const imageArtifact = timeline.artifacts.find(a => 
-        a.artifactType === 'image' && 
-        a.content && 
-        typeof a.content === 'object' && 
-        'url' in a.content
-      )
-      
-      if (imageArtifact) {
-        const url = String(imageArtifact.content.url)
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-          msg.imageUrl = url
-        }
-      }
-      
-      // Attach all artifacts with parsed content
-      msg.artifacts = timeline.artifacts.map(a => {
-        const content = parseArtifactContent(a.content)
-        return {
-          id: a.id,
-          artifactType: a.artifactType,
-          title: a.title,
-          content,
-          // Special handling for image URLs to ensure they're accessible
-          ...(a.artifactType === 'image' && content && typeof content === 'object' && 'url' in content 
-            ? { imageUrl: String(content.url) } 
-            : {})
-        }
-      })
-    }
-  }
-  return msg
+  return textMessage(m.id, m.role, m.content, m.task_id)
 }
 
 /** Chooses a short, honest line to show while a task streams, before the
@@ -242,6 +206,7 @@ export function useNexusWorkspace(getToken?: GetToken) {
           }, {})
           
           setTimelines(newTimelines)
+          console.log("LOADED MESSAGES:", msgs)
           setMessages(msgs.map(messageFromApi))
         } else {
           setActiveConversation(null)
@@ -489,21 +454,19 @@ export function useNexusWorkspace(getToken?: GetToken) {
             }))
             
             const loadedArtifacts = await Promise.all(artifactPromises)
-            const newTimelines = loadedArtifacts.reduce((acc, {messageId, artifacts}) => {
-              return {
-                ...acc,
-                [messageId]: {
-                  ...(acc[messageId] || createTimeline('')),
-                  artifacts: artifacts.map(a => ({
-                    id: a.id,
-                    artifactType: a.artifact_type,
-                    title: a.title,
-                    content: parseArtifactContent(a.content),
-                  })),
-                  finalStatus: 'EXECUTED',
-                }
+            const newTimelines: Record<string, Timeline> = loadedArtifacts.reduce<Record<string, Timeline>>((acc, { messageId, artifacts }) => {
+              acc[messageId] = {
+                ...(acc[messageId] || createTimeline('')),
+                artifacts: artifacts.map(a => ({
+                  id: a.id,
+                  artifactType: a.artifact_type,
+                  title: a.title,
+                  content: parseArtifactContent(a.content),
+                })),
+                finalStatus: 'EXECUTED',
               }
-            }, {...timelines})
+              return acc
+            }, { ...timelines })
 
             setTimelines(newTimelines)
             setMessages(mappedMsgs)
@@ -513,21 +476,11 @@ export function useNexusWorkspace(getToken?: GetToken) {
             setMessages(prev => [...prev])
           }
 
-          if (realAssistant) {
-            setTimelines((prev) => ({
-              ...prev,
-              [realAssistant.id]: prev[assistantMsgId] ?? timeline,
-            }))
-          }
-
-          setMessages(mappedMsgs)
-
-
           if (timeline.taskId) {
             const artifacts = await api.listTaskArtifacts(timeline.taskId, getToken)
 
             setTimelines((prev) => {
-              const targetId = realAssistant?.id ?? assistantMsgId
+              const targetId = assistantMsgId
 
               return {
                 ...prev,
@@ -550,7 +503,7 @@ export function useNexusWorkspace(getToken?: GetToken) {
 
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === realAssistant?.id
+                  m.id === assistantMsgId
                     ? { ...m, imageUrl: String(content.url) }
                     : m
                 )

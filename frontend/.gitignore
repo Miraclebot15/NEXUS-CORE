@@ -13,3 +13,18 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Backup files
+*.bak*
+*.backup*
+*.before-*
+*.db.*
+tsconfig.tsbuildinfo
+
+# Architecture snapshots
+*-before-*
+lib-before-*

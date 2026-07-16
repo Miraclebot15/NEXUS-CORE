@@ -356,7 +356,12 @@ export function WorkspaceShell() {
                   </button>
                 </div>
               ) : messages.length === 0 ? (
-                <Welcome onSend={handleSend} />
+                <Welcome
+                  onSend={handleSend}
+                  projects={projects}
+                  messages={messages}
+                  status={status}
+                />
               ) : (
                 <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
                   {messages.map((m) => {

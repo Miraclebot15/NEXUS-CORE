@@ -294,3 +294,7 @@ export async function* streamTask(
     reader.releaseLock()
   }
 }
+
+export function listProjectArtifacts(projectId: string, getToken?: GetToken) {
+  return request<ArtifactOut[]>(`/api/projects/${projectId}/artifacts`, { getToken })
+}
