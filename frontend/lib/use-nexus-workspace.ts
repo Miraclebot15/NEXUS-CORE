@@ -137,6 +137,14 @@ export function useNexusWorkspace(getToken?: GetToken) {
     let cancelled = false
     async function bootstrap() {
       setStatus('loading')
+
+      const token = await getToken?.()
+
+      if (!token) {
+        window.location.replace('/sign-in')
+        return
+      }
+
       try {
         let projectList = await api.listProjects(getToken)
         if (projectList.length === 0) {

@@ -106,6 +106,9 @@ def evaluate_plan(plan: ExecutionPlan) -> GovernanceVerdict:
                 reason="Plan contained no executable steps.",
             )
 
+        _REFUSAL_ACTION_NAMES = {"deny_request", "refuse_request", "decline_request"}
+        is_refusal = len(plan.steps) == 1 and (plan.steps[0].action or "").strip().lower() in _REFUSAL_ACTION_NAMES
+
         for step in plan.steps:
             action_lower = (step.action or "").strip().lower()
 
@@ -126,6 +129,14 @@ def evaluate_plan(plan: ExecutionPlan) -> GovernanceVerdict:
                     "Plan violates zero-trust policy: "
                     + "; ".join(triggered)
                 ),
+            )
+
+        if is_refusal:
+            return GovernanceVerdict(
+                verdict=Verdict.APPROVED,
+                triggered_rules=["user_request_declined_by_agent"],
+                reason="User request was declined by the agent as a policy violation; the refusal plan itself is safe and approved.",
+                is_user_request_refusal=True,
             )
 
         return GovernanceVerdict(

@@ -269,6 +269,7 @@ def verify_chain() -> bool:
 
 def get_or_create_user(user_id: str) -> dict:
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         row = conn.execute("SELECT id, created_at FROM users WHERE id = ?", (user_id,)).fetchone()
         if row:
             return {"id": row[0], "created_at": row[1]}
@@ -278,10 +279,45 @@ def get_or_create_user(user_id: str) -> dict:
         return {"id": user_id, "created_at": created_at}
 
 
+def save_google_tokens(user_id: str, access_token: str, refresh_token: str | None, expires_at: str) -> None:
+    """Persist Google OAuth tokens for a user so we can call Gmail/Calendar/Drive
+    APIs on their behalf later. refresh_token is only sent by Google on first
+    consent -- if None, we keep whatever refresh_token is already stored."""
+    with _LOCK, _connect() as conn:
+        if refresh_token:
+            conn.execute(
+                "UPDATE users SET google_access_token = ?, google_refresh_token = ?, google_token_expires_at = ? WHERE id = ?",
+                (access_token, refresh_token, expires_at, user_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE users SET google_access_token = ?, google_token_expires_at = ? WHERE id = ?",
+                (access_token, expires_at, user_id),
+            )
+        conn.commit()
+
+
+def get_google_tokens(user_id: str) -> dict | None:
+    """Return stored Google tokens for a user, or None if never connected."""
+    with _LOCK, _connect() as conn:
+        row = conn.execute(
+            "SELECT google_access_token, google_refresh_token, google_token_expires_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row or not row[0]:
+            return None
+        return {
+            "access_token": row[0],
+            "refresh_token": row[1],
+            "expires_at": row[2],
+        }
+
+
 def create_project(user_id: str, name: str) -> dict:
     project_id = new_id("proj")
     created_at = _now()
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conn.execute(
             "INSERT INTO projects (id, user_id, name, created_at) VALUES (?, ?, ?, ?)",
             (project_id, user_id, name, created_at),
@@ -314,6 +350,7 @@ def create_conversation(project_id: str, user_id: str, title: str) -> dict:
     conversation_id = new_id("conv")
     created_at = _now()
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conn.execute(
             """INSERT INTO conversations (id, project_id, user_id, title, created_at)
                VALUES (?, ?, ?, ?, ?)""",
@@ -353,6 +390,7 @@ def get_conversation(conversation_id: str, user_id: str) -> dict | None:
 
 def update_conversation_title(conversation_id: str, user_id: str, title: str) -> dict | None:
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         cur = conn.execute(
             "UPDATE conversations SET title = ? WHERE id = ? AND user_id = ?",
             (title, conversation_id, user_id),
@@ -367,6 +405,7 @@ def add_message(conversation_id: str, role: str, content: str, task_id: str | No
     message_id = new_id("msg")
     created_at = _now()
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conn.execute(
             """INSERT INTO messages (id, conversation_id, role, content, task_id, created_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
@@ -461,6 +500,7 @@ def search_messages(user_id: str, query: str, limit: int = 20) -> list[dict]:
 def create_task(task_id: str, conversation_id: str, user_id: str, prompt: str) -> dict:
     created_at = _now()
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conn.execute(
             """INSERT INTO tasks (id, conversation_id, user_id, prompt, final_status, created_at, updated_at)
                VALUES (?, ?, ?, ?, 'RUNNING', ?, ?)""",
@@ -475,6 +515,7 @@ def create_task(task_id: str, conversation_id: str, user_id: str, prompt: str) -
 
 def update_task_status(task_id: str, final_status: str) -> None:
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conn.execute(
             "UPDATE tasks SET final_status = ?, updated_at = ? WHERE id = ?",
             (final_status, _now(), task_id),
@@ -501,6 +542,7 @@ def create_artifact(task_id: str, artifact_type: str, title: str, content: str) 
     artifact_id = new_id("art")
     created_at = _now()
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conn.execute(
             """INSERT INTO artifacts (id, task_id, artifact_type, title, content, created_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
@@ -547,6 +589,7 @@ def delete_conversation(conversation_id: str, user_id: str) -> bool:
     immutable and independent of whether the chat transcript around it still
     exists. Deleting a conversation tidies the UI; it never erases history."""
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         owned = conn.execute(
             "SELECT id FROM conversations WHERE id = ? AND user_id = ?",
             (conversation_id, user_id),
@@ -566,6 +609,7 @@ def delete_messages_from(conversation_id: str, user_id: str, message_id: str) ->
     stale user+assistant pair before resubmitting). Like delete_conversation,
     this only touches the messages table -- audit_log stays untouched."""
     with _LOCK, _connect() as conn:
+        print("DEBUG DB:", conn.execute("PRAGMA database_list").fetchall())
         conversation = conn.execute(
             "SELECT id FROM conversations WHERE id = ? AND user_id = ?",
             (conversation_id, user_id),
@@ -586,12 +630,40 @@ def delete_messages_from(conversation_id: str, user_id: str, message_id: str) ->
     return True
 
 
-def create_session(token: str, user_id: str, email: str, name: str, picture: str, expires_at: str) -> None:
+def create_session(
+    token: str,
+    user_id: str,
+    email: str,
+    name: str,
+    picture: str,
+    expires_at: str,
+) -> None:
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO sessions (token, user_id, email, name, picture, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (token, user_id, email, name, picture, _now(), expires_at)
+            """
+            INSERT INTO sessions (
+                token,
+                user_id,
+                email,
+                name,
+                picture,
+                created_at,
+                expires_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                token,
+                user_id,
+                email,
+                name,
+                picture,
+                _now(),
+                expires_at,
+            ),
         )
+        conn.commit()
+
 
 def get_session(token: str) -> dict | None:
     with _connect() as conn:
@@ -610,3 +682,89 @@ def delete_session(token: str) -> None:
 def cleanup_expired_sessions() -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM sessions WHERE expires_at < ?", (_now(),))
+
+
+def list_project_artifacts(project_id: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT a.id, a.task_id, a.artifact_type, a.title, a.content, a.created_at,
+                      c.id AS conversation_id, c.title AS conversation_title
+               FROM artifacts a
+               JOIN tasks t ON a.task_id = t.id
+               JOIN conversations c ON t.conversation_id = c.id
+               WHERE c.project_id = ?
+               ORDER BY a.created_at DESC""",
+            (project_id,),
+        ).fetchall()
+    return [
+        {
+            "id": r[0], "task_id": r[1], "artifact_type": r[2], "title": r[3],
+            "content": r[4], "created_at": r[5], "conversation_id": r[6], "conversation_title": r[7],
+        }
+        for r in rows
+    ]
+
+
+def log_security_event(conversation_id: str, user_id: str, level: str, triggered_rules: list[str], reason: str) -> None:
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS security_events (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT,
+                user_id TEXT,
+                level TEXT NOT NULL,
+                triggered_rules TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO security_events (id, conversation_id, user_id, level, triggered_rules, reason, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (new_id("sec"), conversation_id, user_id, level, ",".join(triggered_rules), reason, _now()),
+        )
+        conn.commit()
+
+
+def create_oauth_state(state: str, expires_at: str) -> None:
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS oauth_states (
+                state TEXT PRIMARY KEY,
+                expires_at TEXT NOT NULL
+            )"""
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO oauth_states (state, expires_at) VALUES (?, ?)",
+            (state, expires_at),
+        )
+        conn.commit()
+
+
+def consume_oauth_state(state: str) -> bool:
+    """
+    Validates and deletes a state in one call -- returns True only if the
+    state existed and had not expired. DB-backed so it works correctly across
+    multiple gunicorn workers and survives process restarts.
+    """
+    with _LOCK, _connect() as conn:
+        row = conn.execute(
+            "SELECT expires_at FROM oauth_states WHERE state = ?", (state,)
+        ).fetchone()
+        conn.execute("DELETE FROM oauth_states WHERE state = ?", (state,))
+        conn.commit()
+    if not row:
+        return False
+    return row[0] >= _now()
+
+
+def cleanup_expired_oauth_states() -> None:
+    with _LOCK, _connect() as conn:
+        conn.execute("DELETE FROM oauth_states WHERE expires_at < ?", (_now(),))
+        conn.commit()
+
+
+def update_artifact_content(artifact_id: str, content: str) -> None:
+    with _LOCK, _connect() as conn:
+        conn.execute("UPDATE artifacts SET content = ? WHERE id = ?", (content, artifact_id))
+        conn.commit()

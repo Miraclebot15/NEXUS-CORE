@@ -156,7 +156,7 @@ async def run_pipeline(
         return
 
     # --- Stage 3: Execution (simulated sandbox, real for web_search) -------
-    execution_result = await simulate_execution(current_plan)
+    execution_result = await simulate_execution(current_plan, user_id=user_id)
     yield _emit(task_id, "EXECUTION", "Sandbox execution complete", execution_result.model_dump())
 
     for artifact_payload in execution_result.artifacts:

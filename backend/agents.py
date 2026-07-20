@@ -20,7 +20,7 @@ import uuid
 import httpx
 
 from config import settings, get_api_key_for_model
-from prompts import ELLA_SYSTEM_PROMPT, FINAL_ANSWER_SYSTEM_PROMPT, JANE_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT
+from prompts import ELLA_SYSTEM_PROMPT, FINAL_ANSWER_SYSTEM_PROMPT, JANE_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT, TONE_ADAPTATION_RULES, TIME_TOOL_NOTE, ACCURACY_CALIBRATION_RULES, TOOL_SELECTION_NOTE, WEATHER_NEWS_TOOL_NOTE, SCRAPE_TOOL_NOTE, FAILURE_HONESTY_RULES
 from models import AgentResult, ExecutionPlan, StageStatus
 
 _CHAT_ENDPOINT = f"{settings.qwen_base_url.rstrip('/')}/chat/completions"
@@ -192,7 +192,7 @@ async def run_ella(user_task: str, history: list[dict] | None = None, model_over
     conversation turns as [{"role": "user"|"assistant", "content": str}],
     oldest first -- giving ELLA real multi-turn context instead of treating
     every message as an isolated, stateless task."""
-    return await _run_agent(ELLA_SYSTEM_PROMPT, user_task, history=history, model_override=model_override)
+    return await _run_agent(ELLA_SYSTEM_PROMPT + TIME_TOOL_NOTE + ACCURACY_CALIBRATION_RULES + TOOL_SELECTION_NOTE + WEATHER_NEWS_TOOL_NOTE + SCRAPE_TOOL_NOTE, user_task, history=history, model_override=model_override)
 
 
 async def run_jane(user_task: str, blocked_plan: ExecutionPlan, reason: str) -> AgentResult:
@@ -259,6 +259,51 @@ def _sanitize_execution_for_synthesis(execution_result: dict) -> str:
             parts.append(f"YouTube results for '{_clean(content.get('query',''))}':")
             for r in results[:3]:
                 parts.append(f"  - {_clean(r.get('title',''))} by {_clean(r.get('channel',''))}: {r.get('url','')}")
+        elif atype == "news":
+            articles = content.get("articles", [])
+            parts.append(f"News search results for '{_clean(content.get('query',''))}':")
+            for a in articles[:5]:
+                parts.append(
+                    f"  - {_clean(a.get('title',''))} ({_clean(a.get('source',''))}, {a.get('published_at','')}): "
+                    f"{_clean(a.get('description',''))} [{a.get('url','')}]"
+                )
+
+        elif atype == "weather":
+            parts.append(
+                f"Current weather for {_clean(content.get('location',''))}: "
+                f"{_clean(content.get('condition',''))}, {content.get('temp_c')}C "
+                f"(feels like {content.get('feels_like_c')}C), humidity {content.get('humidity')}%, "
+                f"wind {content.get('wind_kph')}kph. Local time: {content.get('local_time','')}."
+            )
+
+        elif atype == "time_lookup":
+            parts.append(
+                f"Current time for {_clean(content.get('location',''))}: {content.get('formatted','')} "
+                f"(timezone: {content.get('timezone','')})."
+            )
+
+        elif atype == "scraped_page":
+            page_content = content.get("content", "")
+            parts.append(f"Scraped page content from {content.get('url','')}:\n{_clean(page_content)[:2000]}")
+
+        elif atype == "email_draft":
+            status = content.get("status", "")
+            if status == "demo_disabled":
+                parts.append(f"Email action result: {_clean(content.get('message',''))}")
+            elif status == "sent":
+                parts.append(f"Email sent successfully to {content.get('to','')} with subject '{content.get('subject','')}'.")
+            else:
+                parts.append(
+                    f"Email draft created (NOT sent yet -- awaiting user confirmation): "
+                    f"to={content.get('to','')}, subject={content.get('subject','')}, body={_clean(content.get('body',''))[:300]}"
+                )
+
+        elif atype == "email_inbox":
+            if content.get("message"):
+                parts.append(f"Inbox action result: {_clean(content.get('message',''))}")
+            else:
+                parts.append(f"Inbox contains {len(content.get('messages', []))} message(s).")
+
         else:
             parts.append(f"Artifact: {title}")
 
@@ -279,7 +324,7 @@ async def run_synthesis(user_task: str, plan: ExecutionPlan, execution_result: d
         "Write the direct, natural reply to show the user now."
     )
     try:
-        return await _call_qwen(SYNTHESIS_SYSTEM_PROMPT, synthesis_prompt, model_override=model_override)
+        return await _call_qwen(SYNTHESIS_SYSTEM_PROMPT + TONE_ADAPTATION_RULES + ACCURACY_CALIBRATION_RULES + FAILURE_HONESTY_RULES, synthesis_prompt, model_override=model_override)
     except Exception as exc:
         import logging
         import traceback

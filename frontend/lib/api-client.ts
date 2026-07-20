@@ -22,6 +22,13 @@ const API_BASE = (process.env.NEXT_PUBLIC_NEXUS_API_URL || 'http://localhost:800
 
 export type GetToken = () => Promise<string | null | undefined>
 
+// Reads the session token saved by /auth/callback after Google login.
+// Pass this as the default getToken so components don't need to wire it manually.
+export const getStoredToken: GetToken = async () => {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('nexus_session')
+}
+
 // --- Data model types (mirrors backend models.py) --------------------------
 
 export interface ProjectOut {
@@ -241,8 +248,20 @@ export async function* streamTask(
     let detail = res.statusText
     try {
       const json = await res.json()
-      detail = json.detail || detail
-    } catch {
+      if (res.status === 422 && Array.isArray(json.detail)) {
+        const tooLong = json.detail.find((d: any) => d?.type === 'string_too_long')
+        if (tooLong) {
+          throw new NexusApiError(
+            'That message is too long for your plan. Please shorten it or upgrade for a higher limit.',
+            res.status,
+          )
+        }
+        detail = json.detail.map((d: any) => d?.msg).filter(Boolean).join(' ') || detail
+      } else {
+        detail = json.detail || detail
+      }
+    } catch (e) {
+      if (e instanceof NexusApiError) throw e
       /* not JSON */
     }
     throw new NexusApiError(detail, res.status)
@@ -297,4 +316,16 @@ export async function* streamTask(
 
 export function listProjectArtifacts(projectId: string, getToken?: GetToken) {
   return request<ArtifactOut[]>(`/api/projects/${projectId}/artifacts`, { getToken })
+}
+
+export function emailDraftAction(
+  artifactId: string,
+  payload: { action: 'send' | 'discard' | 'edit'; to?: string; subject?: string; body?: string },
+  getToken?: GetToken
+) {
+  return request<{ status: string; to?: string; draft?: any }>(`/api/artifacts/${artifactId}/email-action`, {
+    method: 'POST',
+    body: payload,
+    getToken,
+  })
 }

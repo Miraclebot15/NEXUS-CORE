@@ -12,6 +12,7 @@ The Orchestration Layer's HTTP surface. Routes:
 
 import asyncio
 import json
+from tools import gmail_send
 
 import os
 import shutil
@@ -21,7 +22,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import database
-from auth import get_current_user_id, get_google_auth_url, exchange_code_for_user, create_user_session, generate_state
+from auth import get_current_user_id, get_google_auth_url, exchange_code_for_user, create_user_session, generate_state, create_demo_session
 from config import settings
 from models import (
     ArtifactOut,
@@ -31,9 +32,11 @@ from models import (
     MessageSearchResult,
     ProjectCreate,
     ProjectOut,
+    ThreatLevel,
 )
 from orchestrator import run_pipeline
 from security import SecurityMiddleware, sanitize_prompt, sanitize_stream_error
+from jane_classifier import classify_prompt, soft_deflect
 
 app = FastAPI(title="NEXUS CORE", version="2.0.0")
 
@@ -51,35 +54,70 @@ app.add_middleware(
 app.add_middleware(SecurityMiddleware)
 
 
-# In-memory state store for OAuth CSRF protection
-_oauth_states: dict[str, float] = {}
+@app.get("/auth/demo-login")
+async def demo_login():
+    from fastapi.responses import RedirectResponse
+    token = create_demo_session()
+    frontend_url = f"http://nexus-core-app.duckdns.org:3000/auth/callback?token={token}"
+    return RedirectResponse(frontend_url)
 
 @app.get("/auth/google/login")
 async def google_login():
-    import time
+    from datetime import datetime, timezone, timedelta
     state = generate_state()
-    _oauth_states[state] = time.time() + 600  # 10 min expiry
-    # Cleanup old states
-    now = time.time()
-    expired = [k for k, v in _oauth_states.items() if v < now]
-    for k in expired:
-        del _oauth_states[k]
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+    database.create_oauth_state(state, expires_at)
+    database.cleanup_expired_oauth_states()
     from fastapi.responses import RedirectResponse
     return RedirectResponse(get_google_auth_url(state))
 
 @app.get("/auth/google/callback")
 async def google_callback(code: str = Query(...), state: str = Query(...)):
-    import time
     from fastapi.responses import RedirectResponse
-    # Validate state to prevent CSRF
-    if state not in _oauth_states or _oauth_states[state] < time.time():
-        _oauth_states.pop(state, None)
-        raise HTTPException(status_code=400, detail="Invalid or expired state.")
-    del _oauth_states[state]
-    google_user = await exchange_code_for_user(code)
+
+    # Validate one-time OAuth state (prevents CSRF)
+    if not database.consume_oauth_state(state):
+        return RedirectResponse(
+            "http://nexus-core-app.duckdns.org:3000/sign-in?error=expired_state",
+            status_code=302,
+        )
+
+    try:
+        google_user = await exchange_code_for_user(code)
+    except Exception:
+        return RedirectResponse(
+            "http://nexus-core-app.duckdns.org:3000/sign-in?error=oauth_failed",
+            status_code=302,
+        )
+
     token = create_user_session(google_user)
-    frontend_url = f"http://nexus-core-app.duckdns.org:3000/auth/callback?token={token}"
-    return RedirectResponse(frontend_url)
+
+    # Persist Google OAuth tokens
+    from datetime import datetime, timezone, timedelta
+
+    user_id = f"google_{google_user['id']}"
+    access_token = google_user.get("_access_token")
+    refresh_token = google_user.get("_refresh_token")
+    expires_in = google_user.get("_expires_in", 3600)
+
+    if access_token:
+        expires_at = (
+            datetime.now(timezone.utc)
+            + timedelta(seconds=expires_in)
+        ).isoformat()
+
+        database.save_google_tokens(
+            user_id,
+            access_token,
+            refresh_token,
+            expires_at,
+        )
+
+    frontend_url = (
+        f"http://nexus-core-app.duckdns.org:3000/auth/callback?token={token}"
+    )
+
+    return RedirectResponse(frontend_url, status_code=302)
 
 @app.get("/auth/logout")
 async def logout(authorization: str | None = None):
@@ -217,8 +255,23 @@ async def stream_task(
     if not valid:
         from fastapi.responses import JSONResponse as JR
         return JR(status_code=400, content={"error": reason})
+
+    jane_verdict = classify_prompt(prompt)
     database.get_or_create_user(user_id)
     resolved_conversation_id = _get_or_bootstrap_conversation(user_id, conversation_id)
+
+    if jane_verdict.level in (ThreatLevel.HIGH, ThreatLevel.SUSPICIOUS):
+        database.log_security_event(
+            resolved_conversation_id, user_id, jane_verdict.level.value,
+            jane_verdict.triggered_rules, jane_verdict.reason,
+        )
+        if jane_verdict.level == ThreatLevel.HIGH:
+            async def deflect_stream():
+                reply = soft_deflect(seed=hash(prompt), triggered_rules=jane_verdict.triggered_rules)
+                payload = json.dumps({"final_answer": reply}, default=str)
+                yield f"event: final_answer\ndata: {payload}\n\n"
+            from fastapi.responses import StreamingResponse as SR
+            return SR(deflect_stream(), media_type="text/event-stream")
 
     async def event_stream():
         pipeline = run_pipeline(user_id, resolved_conversation_id, prompt)
@@ -287,6 +340,59 @@ def get_artifact(artifact_id: str, user_id: str = Depends(get_current_user_id)):
     if not task or task["user_id"] != user_id:
         raise HTTPException(status_code=404, detail="Artifact not found.")
     return artifact
+
+
+@app.post("/api/artifacts/{artifact_id}/email-action")
+async def email_draft_action(
+    artifact_id: str,
+    payload: dict,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Handles the three actions a user can take on an email_draft artifact:
+    - "send": actually sends via gmail_send, then marks the draft as sent
+    - "discard": marks the draft as discarded, never sends
+    - "edit": updates to/subject/body in place, stays pending_confirmation
+    """
+    artifact = database.get_artifact(artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+    task = database.get_task(artifact["task_id"])
+    if not task or task["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+    if artifact["artifact_type"] != "email_draft":
+        raise HTTPException(status_code=400, detail="This artifact is not an email draft.")
+
+    content = json.loads(artifact["content"]) if isinstance(artifact["content"], str) else artifact["content"]
+    action = payload.get("action")
+
+    if action == "edit":
+        content["to"] = payload.get("to", content.get("to"))
+        content["subject"] = payload.get("subject", content.get("subject"))
+        content["body"] = payload.get("body", content.get("body"))
+        database.update_artifact_content(artifact_id, json.dumps(content))
+        return {"status": "updated", "draft": content}
+
+    if action == "discard":
+        content["status"] = "discarded"
+        database.update_artifact_content(artifact_id, json.dumps(content))
+        return {"status": "discarded"}
+
+    if action == "send":
+        if user_id.startswith("demo_"):
+            raise HTTPException(status_code=403, detail="Gmail sending is disabled for demo accounts. Contact the developer at corenexus16@gmail.com or WhatsApp 08020828806 to have your email added to the Google OAuth test accounts.")
+        to = payload.get("to", content.get("to"))
+        subject = payload.get("subject", content.get("subject"))
+        body = payload.get("body", content.get("body"))
+        result = await gmail_send(user_id, to, subject, body)
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result["error"])
+        content["status"] = "sent"
+        content["to"], content["subject"], content["body"] = to, subject, body
+        database.update_artifact_content(artifact_id, json.dumps(content))
+        return {"status": "sent", "to": to}
+
+    raise HTTPException(status_code=400, detail="action must be 'send', 'discard', or 'edit'.")
 
 
 # --------------------------------------------------------------------------
@@ -363,10 +469,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def index():
-    return FileResponse("static/index.html")
+    return {"status": "NEXUS CORE API", "docs": "/docs"}
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+
+
+@app.get("/api/projects/{project_id}/artifacts")
+def get_project_artifacts(project_id: str, user_id: str = Depends(get_current_user_id)):
+    project = database.get_project(project_id, user_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return database.list_project_artifacts(project_id)

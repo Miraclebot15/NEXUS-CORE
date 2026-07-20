@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, RotateCcw, TriangleAlert, X } from 'lucide-react'
 import { AmbientBackground } from '@/components/ambient-background'
 import { useNexusWorkspace } from '@/lib/use-nexus-workspace'
+import { getStoredToken } from '@/lib/api-client'
 import { DEFAULT_MODEL_ID } from '@/lib/models'
 import { Sidebar } from './sidebar'
 import { TopBar, type Connection } from './top-bar'
@@ -15,13 +16,14 @@ import { ChatMessage } from './chat-message'
 import { Welcome } from './welcome'
 import { MemorySearch } from './memory-search'
 import { GovernanceLogs } from './governance-logs'
+import { ArtifactsPanel } from './artifacts-panel'
 import type { Timeline, ArtifactItem } from '@/lib/orchestration'
 
 type ReasoningMode = 'standard' | 'deep-research' | 'thinking' | 'brainstorming' | 'learning'
 
 export function WorkspaceShell() {
   // Auth bypassed for demo -- no Clerk dependency.
-  const getTokenFn = useCallback(async () => null, [])
+  const getTokenFn = useCallback(async () => getStoredToken(), [])
 
   const workspace = useNexusWorkspace(getTokenFn)
   const {
@@ -59,6 +61,7 @@ export function WorkspaceShell() {
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactItem | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [governanceLogsOpen, setGovernanceLogsOpen] = useState(false)
+  const [artifactsPanelOpen, setArtifactsPanelOpen] = useState(false)
 
   // --- Resilience state ----------------------------------------------------
   const [browserOnline, setBrowserOnline] = useState(true)
@@ -227,6 +230,13 @@ export function WorkspaceShell() {
         onOpenConversation={selectConversation}
         getToken={getTokenFn}
       />
+      <ArtifactsPanel
+        open={artifactsPanelOpen}
+        onClose={() => setArtifactsPanelOpen(false)}
+        projectId={activeProjectId || ''}
+        getToken={getTokenFn}
+      />
+
       <GovernanceLogs
         open={governanceLogsOpen}
         onClose={() => setGovernanceLogsOpen(false)}
@@ -258,6 +268,7 @@ export function WorkspaceShell() {
                 onCollapse={() => setDesktopSidebar(false)}
                 onOpenSearch={() => setSearchOpen(true)}
                 onOpenGovernanceLogs={() => setGovernanceLogsOpen(true)}
+                onOpenArtifactsPanel={() => setArtifactsPanelOpen(true)}
                 chainValid={health?.chain_valid ?? null}
               />
             </div>
@@ -300,6 +311,7 @@ export function WorkspaceShell() {
                 onCollapse={() => setMobileNav(false)}
                 onOpenSearch={() => setSearchOpen(true)}
                 onOpenGovernanceLogs={() => setGovernanceLogsOpen(true)}
+                onOpenArtifactsPanel={() => setArtifactsPanelOpen(true)}
                 chainValid={health?.chain_valid ?? null}
               />
             </motion.aside>
@@ -381,6 +393,7 @@ export function WorkspaceShell() {
                         onOpenArtifact={openArtifact}
                         onRegenerate={m.id === lastAssistantId && !isBusy ? () => regenerate() : undefined}
                         onEditAndResend={(newText) => editAndResend(m.id, newText)}
+                        getToken={getTokenFn}
                       />
                     )
                   })}

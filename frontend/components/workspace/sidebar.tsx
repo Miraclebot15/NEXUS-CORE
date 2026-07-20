@@ -108,7 +108,6 @@ function ConversationRow({
 /** Nav items with no backing endpoint yet are shown, disabled, with a "Soon"
  *  tag -- rather than left clickable and silently doing nothing. */
 const COMING_SOON_ITEMS: { icon: React.ElementType; label: string }[] = [
-  { icon: Layers, label: 'Artifacts overview' },
   { icon: TerminalSquare, label: 'Sandbox Sessions' },
   { icon: Users, label: 'Team Workspace' },
 ]
@@ -127,6 +126,7 @@ export function Sidebar({
   onCollapse,
   onOpenSearch,
   onOpenGovernanceLogs,
+  onOpenArtifactsPanel,
   chainValid,
 }: {
   projects: ProjectOut[]
@@ -142,6 +142,7 @@ export function Sidebar({
   onCollapse: () => void
   onOpenSearch: () => void
   onOpenGovernanceLogs: () => void
+  onOpenArtifactsPanel: () => void
   chainValid: boolean | null
 }) {
   const activeProject = projects.find((p) => p.id === activeProjectId)
@@ -268,6 +269,14 @@ export function Sidebar({
             >
               <ScrollText className="size-[18px] shrink-0 transition-colors group-hover:text-primary" />
               <span className="truncate">Governance Logs</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenArtifactsPanel}
+              className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+            >
+              <Layers className="size-[18px] shrink-0 transition-colors group-hover:text-primary" />
+              <span className="truncate">Artifacts</span>
             </button>
             {COMING_SOON_ITEMS.map((item) => (
               <div

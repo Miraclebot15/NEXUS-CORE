@@ -37,7 +37,17 @@ def get_google_auth_url(state: str) -> str:
         "client_id": settings.google_oauth_client_id,
         "redirect_uri": settings.google_oauth_redirect_uri,
         "response_type": "code",
-        "scope": "openid email profile",
+        "scope": (
+            "openid email profile "
+            "https://www.googleapis.com/auth/gmail.readonly "
+            "https://www.googleapis.com/auth/gmail.send "
+            "https://www.googleapis.com/auth/calendar "
+            "https://www.googleapis.com/auth/drive.file "
+            "https://www.googleapis.com/auth/spreadsheets "
+            "https://www.googleapis.com/auth/documents "
+            "https://www.googleapis.com/auth/contacts.readonly "
+            "https://www.googleapis.com/auth/youtube"
+        ),
         "state": state,
         "access_type": "offline",
         "prompt": "select_account",
@@ -65,7 +75,11 @@ async def exchange_code_for_user(code: str) -> dict:
         )
         if user_resp.status_code != 200:
             raise HTTPException(status_code=401, detail="Authentication required.")
-        return user_resp.json()
+        user_info = user_resp.json()
+        user_info["_access_token"] = access_token
+        user_info["_refresh_token"] = tokens.get("refresh_token")
+        user_info["_expires_in"] = tokens.get("expires_in", 3600)
+        return user_info
 
 def create_user_session(google_user: dict) -> str:
     user_id = f"google_{google_user['id']}"
@@ -95,3 +109,20 @@ async def get_current_user_id(authorization: str | None = Header(default=None)) 
         database.delete_session(token)
         raise HTTPException(status_code=401, detail="Authentication required.")
     return session["user_id"]
+
+
+def create_demo_session() -> str:
+    """
+    Creates a fresh, isolated temporary account for judges/reviewers --
+    no Google OAuth needed. Each call gets its own unique demo_<id> user,
+    so multiple simultaneous reviewers never share history with each other.
+    Gmail-dependent features are intentionally disabled for these accounts
+    (see tools.py) since there's no real inbox behind them.
+    """
+    import uuid
+    user_id = f"demo_{uuid.uuid4().hex[:12]}"
+    database.get_or_create_user(user_id)
+    token = generate_session_token()
+    expires_at = _now_plus(SESSION_DAYS)
+    database.create_session(token, user_id, "", "Demo User", "", expires_at)
+    return token

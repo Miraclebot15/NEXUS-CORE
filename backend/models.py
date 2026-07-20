@@ -43,6 +43,7 @@ class GovernanceVerdict(BaseModel):
     verdict: Verdict
     triggered_rules: list[str] = Field(default_factory=list)
     reason: str = ""
+    is_user_request_refusal: bool = False
 
 
 class StageStatus(str, Enum):
@@ -131,3 +132,16 @@ class MessageSearchResult(BaseModel):
     created_at: str
     conversation_title: str
     project_id: str
+
+
+class ThreatLevel(str, Enum):
+    NONE = "NONE"
+    LOW = "LOW"
+    SUSPICIOUS = "SUSPICIOUS"
+    HIGH = "HIGH"
+
+
+class JaneVerdict(BaseModel):
+    level: ThreatLevel
+    triggered_rules: list[str] = Field(default_factory=list)
+    reason: str = ""

@@ -9,10 +9,13 @@ import {
   GitBranch,
   Pencil,
   RefreshCw,
+  Send,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   X,
 } from 'lucide-react'
+import * as api from '@/lib/api-client'
 import type { NexusMessage } from '@/lib/use-nexus-workspace'
 import type { Timeline } from '@/lib/orchestration'
 import { Markdown } from './markdown'
@@ -63,14 +66,18 @@ const COLLAPSE_THRESHOLD = 400 // chars
 
 function UserBubble({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
-  const isLong = text.length > COLLAPSE_THRESHOLD
-  const displayed = isLong && !expanded ? text.slice(0, COLLAPSE_THRESHOLD) : text
+  // Normalize line endings -- pasted terminal/SSH output can contain bare \r
+  // or \r\n, which can visually clip/overwrite the start of lines in some
+  // mobile browsers if left unnormalized.
+  const clean = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const isLong = clean.length > COLLAPSE_THRESHOLD
+  const displayed = isLong && !expanded ? clean.slice(0, COLLAPSE_THRESHOLD) : clean
 
   return (
-    <div className="rounded-2xl rounded-tr-md border border-white/[0.09] bg-gradient-to-br from-white/[0.09] to-white/[0.05] backdrop-blur-md px-4 py-3 text-[15px] leading-relaxed text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_12px_rgba(0,0,0,0.3)] transition-all duration-200 hover:border-white/[0.14]">
+    <div className="rounded-2xl rounded-tr-md border border-white/[0.09] bg-gradient-to-br from-white/[0.09] to-white/[0.05] backdrop-blur-md px-4 py-3 text-[15px] leading-relaxed text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_2px_12px_rgba(0,0,0,0.3)] transition-all duration-200 hover:border-white/[0.14] max-w-full overflow-x-hidden">
       {isLong ? (
         <>
-          <span className="whitespace-pre-wrap break-words">{displayed}</span>
+          <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{displayed}</span>
           {!expanded && <span className="text-muted-foreground">...</span>}
           <button
             type="button"
@@ -81,7 +88,7 @@ function UserBubble({ text }: { text: string }) {
           </button>
         </>
       ) : (
-        <span className="whitespace-pre-wrap break-words">{text}</span>
+        <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{clean}</span>
       )}
     </div>
   )
@@ -119,6 +126,121 @@ function ImageArtifactInline({ url, prompt }: { url: string; prompt: string }) {
   )
 }
 
+function EmailDraftCard({
+  artifactId,
+  initialTo,
+  initialSubject,
+  initialBody,
+  initialStatus,
+  initialMessage,
+  getToken,
+}: {
+  artifactId: string
+  initialTo: string
+  initialSubject: string
+  initialBody: string
+  initialStatus: string
+  initialMessage?: string
+  getToken?: () => Promise<string | null | undefined>
+}) {
+  const [status, setStatus] = useState(initialStatus)
+  const [message, setMessage] = useState(initialMessage || '')
+  const [editing, setEditing] = useState(false)
+  const [to, setTo] = useState(initialTo)
+  const [subject, setSubject] = useState(initialSubject)
+  const [body, setBody] = useState(initialBody)
+  const [busy, setBusy] = useState(false)
+
+  const handleAction = async (action: 'send' | 'discard' | 'edit') => {
+    setBusy(true)
+    try {
+      const result = await api.emailDraftAction(artifactId, { action, to, subject, body }, getToken)
+      if (action === 'send') setStatus('sent')
+      if (action === 'discard') setStatus('discarded')
+      if (action === 'edit') { setStatus('pending_confirmation'); setEditing(false) }
+    } catch (e: any) {
+      setMessage(e?.message || 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (status === 'demo_disabled') {
+    return (
+      <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+        <p className="text-xs text-muted-foreground">{message}</p>
+      </div>
+    )
+  }
+
+  if (status === 'sent') {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3">
+        <Check className="size-4 text-emerald-400" />
+        <p className="text-xs text-emerald-300">Sent to {to}</p>
+      </div>
+    )
+  }
+
+  if (status === 'discarded') {
+    return (
+      <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+        <p className="text-xs text-muted-foreground">Draft discarded — not sent.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
+      <div className="px-3 py-2 border-b border-white/[0.06] flex items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-muted-foreground/70">Email draft — not sent yet</span>
+      </div>
+      <div className="p-3 space-y-2">
+        {editing ? (
+          <>
+            <input value={to} onChange={e => setTo(e.target.value)}
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-foreground" placeholder="To" />
+            <input value={subject} onChange={e => setSubject(e.target.value)}
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-foreground" placeholder="Subject" />
+            <textarea value={body} onChange={e => setBody(e.target.value)} rows={4}
+              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-xs text-foreground resize-none" placeholder="Body" />
+          </>
+        ) : (
+          <>
+            <p className="text-xs"><span className="text-muted-foreground/70">To: </span>{to}</p>
+            <p className="text-xs"><span className="text-muted-foreground/70">Subject: </span>{subject}</p>
+            <p className="text-xs whitespace-pre-wrap text-muted-foreground">{body}</p>
+          </>
+        )}
+      </div>
+      <div className="flex gap-2 px-3 pb-3">
+        {editing ? (
+          <button disabled={busy} onClick={() => handleAction('edit')}
+            className="flex items-center gap-1.5 rounded-lg bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white/[0.12] disabled:opacity-50">
+            <Check className="size-3.5" /> Save
+          </button>
+        ) : (
+          <>
+            <button disabled={busy} onClick={() => handleAction('send')}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50">
+              <Send className="size-3.5" /> Send
+            </button>
+            <button disabled={busy} onClick={() => setEditing(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/[0.05] disabled:opacity-50">
+              <Pencil className="size-3.5" /> Edit
+            </button>
+            <button disabled={busy} onClick={() => handleAction('discard')}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50">
+              <Trash2 className="size-3.5" /> Discard
+            </button>
+          </>
+        )}
+      </div>
+      {message && <p className="px-3 pb-2 text-[11px] text-red-300">{message}</p>}
+    </div>
+  )
+}
+
 function VideoEmbed({ url, title }: { url: string; title: string }) {
   const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
   if (!videoId) return (
@@ -152,6 +274,7 @@ export function ChatMessage({
   onOpenArtifact,
   onRegenerate,
   onEditAndResend,
+  getToken,
 }: {
   message: NexusMessage
   timeline?: Timeline
@@ -163,6 +286,7 @@ export function ChatMessage({
   onOpenContext: () => void
   onOpenArtifact?: (artifact: ArtifactItem) => void
   onRegenerate?: () => void
+  getToken?: () => Promise<string | null | undefined>
   onEditAndResend?: (newText: string) => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -311,6 +435,27 @@ export function ChatMessage({
           })
         }
         {timeline && !isActive && timeline.artifacts
+          .filter(a => a.artifactType === 'email_draft')
+          .map((a, i) => {
+            try {
+              if (!a.id) return null
+              const c = typeof a.content === 'string' ? JSON.parse(a.content) : a.content as any
+              return (
+                <EmailDraftCard
+                  key={i}
+                  artifactId={a.id}
+                  initialTo={c?.to || ''}
+                  initialSubject={c?.subject || ''}
+                  initialBody={c?.body || ''}
+                  initialStatus={c?.status || 'pending_confirmation'}
+                  initialMessage={c?.message}
+                  getToken={getToken}
+                />
+              )
+            } catch { return null }
+          })
+        }
+        {timeline && !isActive && timeline.artifacts
           .filter(a => a.artifactType === 'youtube_results')
           .flatMap(a => {
             const c = typeof a.content === 'string' ? JSON.parse(a.content) : a.content as any
@@ -320,7 +465,7 @@ export function ChatMessage({
           })
         }
         {timeline && !isActive && onOpenArtifact && timeline.artifacts
-          .filter(a => a.artifactType !== 'search_results' && a.artifactType !== 'youtube_results' && a.artifactType !== 'image')
+          .filter(a => a.artifactType !== 'search_results' && a.artifactType !== 'youtube_results' && a.artifactType !== 'image' && a.artifactType !== 'email_draft')
           .map((artifact, i) => (
             <button key={i} type="button" onClick={() => onOpenArtifact(artifact)}
               className="mt-2 flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground">
@@ -330,7 +475,7 @@ export function ChatMessage({
           ))
         }
         {timeline && !isActive && onOpenArtifact && timeline.artifacts
-          .filter(a => a.artifactType !== 'search_results' && a.artifactType !== 'youtube_results')
+          .filter(a => a.artifactType !== 'search_results' && a.artifactType !== 'youtube_results' && a.artifactType !== 'email_draft')
           .map((artifact, i) => (
             <button
               key={i}
